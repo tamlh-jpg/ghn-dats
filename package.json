@@ -1,0 +1,11 @@
+{
+  "name": "ghn-dats",
+  "version": "1.0.0",
+  "description": "GHN - Hệ thống Trình Ký Hồ Sơ Vận Hành (DATS)",
+  "scripts": {
+    "build": "echo 'Static site - no build required'"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
