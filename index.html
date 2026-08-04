@@ -1,0 +1,2789 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GHN - Hệ thống trình ký hồ sơ vận hành (DATS)</title>
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Supabase Configuration -->
+  <script src="supabase-config.js"></script>
+  <!-- Tailwind CSS Configuration -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            outfit: ['Outfit', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#fff7ed',
+              100: '#ffedd5',
+              500: '#ff5c00',
+              600: '#e04f00',
+              700: '#c2410c',
+              900: '#7c2d12',
+            },
+            ghn: {
+              orange: '#ff5c00',
+              orangeRed: '#ff3300',
+              blue: '#005691',
+              blueHover: '#003e69',
+              lightBg: '#fdfbf9',
+              slate: '#1e293b'
+            }
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'fade-in': 'fadeIn 0.4s ease-out forwards',
+            'slide-up': 'slideUp 0.4s ease-out forwards',
+          },
+          keyframes: {
+            fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+            slideUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+          }
+        }
+      }
+    }
+  </script>
+  <style type="text/css">
+    .glass {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .glass-light {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .step-tooltip { position: relative; }
+    .step-tooltip::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: 125%;
+      left: 50%;
+      transform: translateX(-50%) scale(0);
+      background-color: #0f172a;
+      color: #fff;
+      text-align: center;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      white-space: nowrap;
+      z-index: 50;
+      opacity: 0;
+      transition: all 0.2s ease-in-out;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      pointer-events: none;
+    }
+    .step-tooltip:hover::after {
+      transform: translateX(-50%) scale(1);
+      opacity: 1;
+    }
+    /* Login screen */
+    #login-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0c1a2e 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+    }
+    #login-screen.hidden { display: none; }
+    .login-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 24px;
+      padding: 40px;
+      width: 100%;
+      max-width: 440px;
+      animation: slideUp 0.5s ease-out forwards;
+    }
+    .login-bg-orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.15;
+      pointer-events: none;
+    }
+    /* Admin panel styles */
+    #admin-panel { display: none; }
+    #admin-panel.active { display: block; }
+    #ops-panel { display: block; }
+    #ops-panel.hidden-panel { display: none; }
+    /* User avatar initials */
+    .user-avatar {
+      background: linear-gradient(135deg, #ff5c00, #e04f00);
+      color: white;
+      font-weight: 800;
+      font-family: 'Outfit', sans-serif;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    /* Tooltip for admin badge */
+    .superadmin-badge {
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      color: #7c2d12;
+    }
+    /* Loading overlay */
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: rgba(15, 23, 42, 0.95);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      transition: opacity 0.3s;
+    }
+    #loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .loading-spinner {
+      border: 4px solid rgba(255, 255, 255, 0.1);
+      border-top: 4px solid #ff5c00;
+      border-radius: 50%;
+      width: 48px;
+      height: 48px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    /* Google button style */
+    .google-btn {
+      background: white;
+      color: #1e293b;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-weight: 700;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .google-btn:hover {
+      background: #f8fafc;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      transform: translateY(-1px);
+    }
+    .google-btn:active {
+      transform: scale(0.98);
+    }
+    /* Disabled state */
+    .disabled-state {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="h-full bg-[#fdfbf9] text-slate-800 font-sans transition-colors duration-300 dark:bg-slate-900 dark:text-slate-100">
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <p class="text-slate-400 text-sm font-bold">Đang kết nối hệ thống...</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- LOGIN SCREEN OVERLAY -->
+  <!-- ============================================================ -->
+  <div id="login-screen">
+    <!-- Background orbs -->
+    <div class="login-bg-orb w-80 h-80 bg-[#ff5c00]" style="top: -100px; left: -100px;"></div>
+    <div class="login-bg-orb w-96 h-96 bg-[#005691]" style="bottom: -120px; right: -80px;"></div>
+    <div class="login-bg-orb w-48 h-48 bg-purple-600" style="top: 40%; right: 20%;"></div>
+
+    <div class="login-card mx-4">
+      <!-- Logo & Title -->
+      <div class="text-center mb-8">
+        <div class="flex items-center justify-center mb-4">
+          <img src="logo GHN.jpg" alt="GHN Logo" class="h-12 w-auto object-contain brightness-0 invert">
+        </div>
+        <h1 class="text-2xl font-extrabold font-outfit text-white mb-1">Đăng nhập hệ thống</h1>
+        <p class="text-slate-400 text-sm">Trình Ký Hồ Sơ Vận Hành · DATS</p>
+        <div class="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="text-xs text-slate-300 font-semibold">Chỉ tài khoản <span class="text-[#ff5c00] font-bold">@ghn.vn</span> được phép truy cập</span>
+        </div>
+      </div>
+
+      <!-- Google Login Button (thay thế form email/password) -->
+      <div class="space-y-4">
+        <button onclick="handleGoogleLogin()" id="google-login-btn" class="google-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 48 48">
+            <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
+            <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/>
+            <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/>
+            <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
+          </svg>
+          Đăng nhập bằng Google (@ghn.vn)
+        </button>
+
+        <!-- Error message -->
+        <div id="login-error" class="hidden flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span id="login-error-text"></span>
+        </div>
+      </div>
+
+      <!-- Footer hint -->
+      <p class="text-center text-[11px] text-slate-600 mt-6">
+        Hệ thống nội bộ GHN · Document Approval Tracking System
+      </p>
+      <p class="text-center text-[10px] text-slate-700 mt-2">
+        Sử dụng Google Workspace <span class="text-slate-500">(@ghn.vn)</span> để đăng nhập
+      </p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MAIN APP WRAPPER (ẩn đến khi đăng nhập) -->
+  <!-- ============================================================ -->
+  <div id="app-wrapper" class="min-h-full flex flex-col hidden">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-3 max-w-sm pointer-events-none"></div>
+
+    <!-- Header Navigation -->
+    <header class="border-b-4 border-[#ff5c00] bg-white dark:bg-slate-900 sticky top-0 z-40 shadow-sm dark:shadow-slate-950/20">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-20">
+          
+          <!-- Logo & Brand -->
+          <div class="flex items-center gap-2">
+            <a href="#" class="flex items-center">
+              <img src="logo GHN.jpg" alt="GiaoHangNhanh Logo" class="h-10 sm:h-12 w-auto object-contain">
+            </a>
+            <div class="h-8 w-[1px] bg-slate-200 dark:bg-slate-700 mx-3 hidden sm:block"></div>
+            <div class="hidden sm:block">
+              <span class="text-xs font-bold uppercase tracking-wider text-[#005691] dark:text-[#ff5c00] block leading-none">Hệ thống</span>
+              <span class="text-sm font-extrabold font-outfit text-slate-800 dark:text-white leading-none">Trình Ký Hồ Sơ Vận Hành</span>
+            </div>
+          </div>
+
+          <!-- Connection Status -->
+          <div id="conn-status" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Đã kết nối</span>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <!-- User Info Card -->
+            <div class="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <!-- Avatar -->
+              <div id="header-avatar" class="user-avatar w-8 h-8 text-xs">A</div>
+              <!-- Info -->
+              <div class="hidden sm:block leading-tight">
+                <div id="header-username" class="text-xs font-bold text-slate-800 dark:text-white max-w-[140px] truncate">Người dùng</div>
+                <div id="header-role-badge" class="text-[10px] font-bold text-[#ff5c00]">BP Vận hành</div>
+              </div>
+            </div>
+
+            <!-- Dark/Light Theme Button -->
+            <button id="theme-toggle" class="p-2 text-slate-500 dark:text-slate-400 hover:text-[#ff5c00] dark:hover:text-[#ff5c00] rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-850 transition-colors" title="Chuyển chế độ Sáng/Tối">
+              <i data-lucide="sun" id="sun-icon" class="w-5 h-5 hidden"></i>
+              <i data-lucide="moon" id="moon-icon" class="w-5 h-5"></i>
+            </button>
+
+            <!-- Add Document Action Button -->
+            <button id="add-doc-btn" onclick="openModal('add-modal')" class="flex items-center gap-2 px-4 py-2.5 bg-[#ff5c00] hover:bg-[#e04f00] text-white rounded-lg text-sm font-semibold transition-all shadow-md shadow-[#ff5c00]/10 hover:shadow-[#ff5c00]/25 border border-transparent active:scale-95">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              <span>Thêm Hồ Sơ</span>
+            </button>
+
+            <!-- Export Data (Admin only) -->
+            <button id="export-btn" onclick="exportData()" class="hidden items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors text-xs font-semibold" title="Xuất dữ liệu CSV">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span class="hidden lg:inline">Xuất CSV</span>
+            </button>
+
+            <!-- Logout Button -->
+            <button onclick="handleLogout()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-500 border border-slate-200 dark:bg-slate-800 dark:hover:bg-red-950/20 dark:text-slate-400 dark:border-slate-700 transition-colors text-xs font-semibold" title="Đăng xuất">
+              <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+              <span class="hidden sm:inline">Đăng xuất</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      
+      <!-- Role / Section Tabs (Admin sees both tabs) -->
+      <div id="role-navigation-tabs" class="hidden mb-6 border-b border-slate-200 dark:border-slate-800">
+        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+          <button onclick="switchTab('operations')" id="tab-operations" class="border-[#ff5c00] text-[#ff5c00] dark:text-[#ff5c00] whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm flex items-center gap-2">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+            Tất cả hồ sơ
+          </button>
+          <button onclick="switchTab('admin')" id="tab-admin" class="border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm flex items-center gap-2">
+            <i data-lucide="shield-alert" class="w-4 h-4"></i>
+            Quản trị hệ thống
+          </button>
+        </nav>
+      </div>
+
+      <!-- =================== OPERATIONS PANEL =================== -->
+      <div id="ops-panel">
+
+        <!-- Stats Cards Row -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+          <div id="stat-card-1" class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all flex items-center justify-between group dark:bg-slate-850 dark:border-slate-800">
+            <div class="space-y-1">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Tổng số hồ sơ</span>
+              <div id="stat-total" class="text-3xl font-extrabold font-outfit text-slate-800 dark:text-white">0</div>
+            </div>
+            <div class="h-12 w-12 rounded-xl bg-[#005691]/10 text-[#005691] dark:bg-[#005691]/20 dark:text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <i data-lucide="files" class="w-6 h-6"></i>
+            </div>
+          </div>
+
+          <div id="stat-card-2" class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all flex items-center justify-between group dark:bg-slate-850 dark:border-slate-800">
+            <div class="space-y-1">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Đã hoàn thành</span>
+              <div id="stat-done" class="text-3xl font-extrabold font-outfit text-emerald-600 dark:text-emerald-400">0</div>
+            </div>
+            <div class="h-12 w-12 rounded-xl bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+            </div>
+          </div>
+
+          <div id="stat-card-3" class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all flex items-center justify-between group dark:bg-slate-850 dark:border-slate-800">
+            <div class="space-y-1">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Đang xử lý</span>
+              <div id="stat-in-progress" class="text-3xl font-extrabold font-outfit text-[#ff5c00]">0</div>
+            </div>
+            <div class="h-12 w-12 rounded-xl bg-[#ff5c00]/10 text-[#ff5c00] flex items-center justify-center group-hover:scale-110 transition-transform">
+              <i data-lucide="loader" class="w-6 h-6 animate-pulse-slow"></i>
+            </div>
+          </div>
+
+          <div id="stat-card-4" class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between dark:bg-slate-850 dark:border-slate-800">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Tỷ lệ hoàn thành</span>
+              <span id="stat-rate-text" class="text-sm font-extrabold font-outfit text-[#005691] dark:text-[#ff5c00]">0%</span>
+            </div>
+            <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+              <div id="stat-rate-bar" class="bg-gradient-to-r from-[#ff5c00] to-[#005691] h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Filter & Search Panel -->
+        <section id="filter-section" class="bg-white border border-slate-200 rounded-2xl p-6 mb-4 shadow-sm dark:bg-slate-850 dark:border-slate-800">
+          <div class="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-slate-800/60 pb-3">
+            <div class="flex items-center gap-2">
+              <i data-lucide="sliders-horizontal" class="w-5 h-5 text-[#ff5c00]"></i>
+              <h2 class="text-sm font-bold text-slate-700 dark:text-slate-200 font-outfit tracking-wide uppercase">Bộ lọc & Tìm kiếm hồ sơ</h2>
+            </div>
+            <button onclick="resetFilters()" class="text-xs text-slate-500 hover:text-[#ff5c00] dark:text-slate-400 dark:hover:text-[#ff5c00] flex items-center gap-1.5 transition-colors font-semibold bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800/80 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-750">
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+              <span>Đặt lại bộ lọc</span>
+            </button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <!-- Text Search -->
+            <div class="lg:col-span-2 space-y-1" id="filter-search-box">
+              <label class="block text-xs font-bold text-slate-400">Tìm kiếm từ khóa</label>
+              <div class="relative">
+                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                <input type="text" id="search-input" oninput="applyFilters()" placeholder="Người gửi, nhà cung cấp, nội dung, mã vận đơn..." class="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] focus:border-[#ff5c00] dark:bg-slate-900 dark:border-slate-800 transition-all text-slate-800 dark:text-slate-100 placeholder-slate-400">
+              </div>
+            </div>
+            <!-- Doc Type Filter -->
+            <div class="space-y-1" id="filter-type-box">
+              <label class="block text-xs font-bold text-slate-400">Loại hồ sơ</label>
+              <select id="filter-type" onchange="applyFilters()" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] dark:bg-slate-900 dark:border-slate-800 transition-all text-slate-800 dark:text-slate-100">
+                <option value="">Tất cả</option>
+                <option value="Hợp Đồng">Hợp Đồng</option>
+                <option value="Phụ Lục">Phụ Lục</option>
+                <option value="BBTL">BBTL (Biên bản thanh lý)</option>
+              </select>
+            </div>
+            <!-- Region Filter -->
+            <div class="space-y-1" id="filter-region-box">
+              <label class="block text-xs font-bold text-slate-400">Vùng miền</label>
+              <select id="filter-region" onchange="onRegionFilterChange()" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] dark:bg-slate-900 dark:border-slate-800 transition-all text-slate-800 dark:text-slate-100">
+                <option value="">Tất cả</option>
+                <option value="Miền Bắc">Miền Bắc</option>
+                <option value="Miền Trung">Miền Trung</option>
+                <option value="Miền Nam">Miền Nam</option>
+              </select>
+            </div>
+            <!-- Province Filter -->
+            <div class="space-y-1" id="filter-province-box">
+              <label class="block text-xs font-bold text-slate-400">Tỉnh thành</label>
+              <select id="filter-province" onchange="applyFilters()" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] dark:bg-slate-900 dark:border-slate-800 transition-all text-slate-800 dark:text-slate-100">
+                <option value="">Tất cả</option>
+              </select>
+            </div>
+            <!-- Step Filter (Admin only) -->
+            <div class="lg:col-span-1 space-y-1" id="filter-step-box">
+              <label class="block text-xs font-bold text-slate-400">Phân loại hồ sơ</label>
+              <select id="filter-step" onchange="applyFilters()" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] dark:bg-slate-900 dark:border-slate-800 transition-all text-slate-800 dark:text-slate-100">
+                <option value="">Tất cả</option>
+                <option value="waiting">Đang chờ (Admin chưa nhận)</option>
+                <option value="in-progress">Đang trình ký</option>
+                <option value="done">Đã hoàn thành</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section id="workflow-tab-section" class="bg-white border border-slate-200 rounded-2xl p-3 mb-6 shadow-sm dark:bg-slate-850 dark:border-slate-800">
+          <div class="flex flex-wrap gap-2">
+            <button onclick="setWorkflowTab('waiting')" id="workflow-tab-waiting" class="workflow-tab-btn px-4 py-2 rounded-xl text-sm font-bold border border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-300 transition-all">
+              <i data-lucide="clock-3" class="w-4 h-4 inline-block mr-1"></i>Đang chờ
+            </button>
+            <button onclick="setWorkflowTab('in-progress')" id="workflow-tab-in-progress" class="workflow-tab-btn px-4 py-2 rounded-xl text-sm font-bold border border-slate-200 bg-slate-50 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 transition-all">
+              <i data-lucide="loader" class="w-4 h-4 inline-block mr-1"></i>Đang trình ký
+            </button>
+            <button onclick="setWorkflowTab('done')" id="workflow-tab-done" class="workflow-tab-btn px-4 py-2 rounded-xl text-sm font-bold border border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-300 transition-all">
+              <i data-lucide="check-circle-2" class="w-4 h-4 inline-block mr-1"></i>Đã hoàn thành
+            </button>
+          </div>
+        </section>
+
+        <!-- Data Table Container -->
+        <section id="table-section" class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm dark:bg-slate-850 dark:border-slate-800">
+          <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100 dark:border-slate-800">
+            <h3 id="table-title" class="font-bold text-base text-slate-700 dark:text-slate-200 font-outfit">Danh sách hồ sơ vận hành</h3>
+            <div class="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+              Hiển thị <span id="displayed-count" class="font-extrabold text-[#ff5c00]">0</span> / <span id="total-count" class="font-bold text-slate-700 dark:text-slate-300">0</span> hồ sơ
+            </div>
+          </div>
+          <div class="overflow-x-auto no-scrollbar">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-orange-50/20 dark:bg-slate-900/60 border-b border-slate-100 dark:border-slate-800 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <th class="py-4 px-6 w-14 text-center">STT</th>
+                  <th class="py-4 px-4 min-w-[120px]">Loại HS</th>
+                  <th class="py-4 px-4 min-w-[145px]">Vùng / Tỉnh</th>
+                  <th class="py-4 px-4 min-w-[130px]">Người gửi</th>
+                  <th class="py-4 px-4 min-w-[160px]">Nhà cung cấp (NCC)</th>
+                  <th class="py-4 px-4 min-w-[220px]">Nội dung hồ sơ</th>
+                  <th class="py-4 px-4 min-w-[110px] cursor-pointer hover:text-[#ff5c00] transition-colors" onclick="toggleSort('ngayNhan')">
+                    Ngày nhận
+                    <span id="sort-icon-ngayNhan" class="inline-block ml-1">⇅</span>
+                  </th>
+                  <th class="py-4 px-4 min-w-[280px] text-center">Tiến trình trình ký (Ngày duyệt)</th>
+                  <th class="py-4 px-4 min-w-[130px] text-center">Trạng thái</th>
+                  <th class="py-4 px-4 min-w-[140px] text-center">Mã vận đơn GHN</th>
+                  <th class="py-4 px-6 w-28 text-center">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="table-body" class="divide-y divide-slate-100 dark:divide-slate-800/40 text-sm">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+          <!-- Empty State -->
+          <div id="empty-state" class="hidden py-16 flex flex-col items-center justify-center text-center px-4">
+            <div class="h-16 w-16 bg-orange-50 text-[#ff5c00] dark:bg-slate-900 rounded-2xl border border-orange-100 dark:border-slate-800 flex items-center justify-center mb-4">
+              <i data-lucide="folder-open" class="w-8 h-8"></i>
+            </div>
+            <h4 class="text-slate-700 dark:text-slate-300 font-bold text-base mb-1">Không tìm thấy hồ sơ nào</h4>
+            <p class="text-slate-450 dark:text-slate-500 text-xs max-w-xs">Hãy thử thay đổi từ khóa tìm kiếm hoặc đặt lại các bộ lọc hiện tại.</p>
+          </div>
+          <!-- Loading State -->
+          <div id="table-loading" class="hidden py-16 flex items-center justify-center">
+            <div class="loading-spinner border-slate-200 dark:border-slate-700" style="border-top-color: #ff5c00;"></div>
+            <span class="ml-3 text-sm text-slate-400 font-semibold">Đang tải dữ liệu...</span>
+          </div>
+        </section>
+      </div>
+
+      <!-- =================== ADMIN PANEL =================== -->
+      <div id="admin-panel">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <!-- Left: Admin Account Management -->
+          <div class="lg:col-span-1">
+            <div class="bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+              <!-- Header -->
+              <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+                <div class="flex items-center gap-2 mb-1">
+                  <i data-lucide="shield-check" class="w-5 h-5 text-[#ff5c00]"></i>
+                  <h3 class="font-bold text-base text-slate-700 dark:text-slate-200 font-outfit">Quản lý tài khoản Admin</h3>
+                </div>
+                <p class="text-xs text-slate-400">Chỉ quản trị viên tối cao mới có thể thêm/xóa admin</p>
+              </div>
+              <!-- Add Admin Form (superadmin only) -->
+              <div id="add-admin-section" class="hidden px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-amber-50/20 dark:bg-amber-500/5">
+                <p class="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-3">Thêm Admin mới</p>
+                <div class="space-y-2">
+                  <input type="text" id="new-admin-name" placeholder="Họ và tên..." class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] text-slate-800 dark:text-slate-100 placeholder-slate-400">
+                  <input type="email" id="new-admin-email" placeholder="email@ghn.vn" class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] text-slate-800 dark:text-slate-100 placeholder-slate-400">
+                  <button onclick="addAdmin()" class="w-full py-2 bg-[#ff5c00] hover:bg-[#e04f00] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5">
+                    <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                    Thêm Admin
+                  </button>
+                </div>
+              </div>
+              <!-- Admin List -->
+              <div id="admin-list-container" class="divide-y divide-slate-100 dark:divide-slate-800 max-h-96 overflow-y-auto">
+                <!-- Rendered dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: System Overview (all records for Admin) -->
+          <div class="lg:col-span-2">
+            <div class="bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+              <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="bar-chart-3" class="w-5 h-5 text-[#ff5c00]"></i>
+                  <h3 class="font-bold text-base text-slate-700 dark:text-slate-200 font-outfit">Tổng quan hệ thống</h3>
+                </div>
+              </div>
+              <div class="p-6">
+                <!-- System Stats Grid -->
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                  <div class="p-4 bg-[#005691]/5 border border-[#005691]/10 rounded-xl">
+                    <div class="text-2xl font-extrabold font-outfit text-[#005691]" id="admin-stat-total">0</div>
+                    <div class="text-xs font-bold text-slate-500 mt-1">Tổng hồ sơ hệ thống</div>
+                  </div>
+                  <div class="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
+                    <div class="text-2xl font-extrabold font-outfit text-emerald-600" id="admin-stat-done">0</div>
+                    <div class="text-xs font-bold text-slate-500 mt-1">Hồ sơ hoàn tất</div>
+                  </div>
+                  <div class="p-4 bg-[#ff5c00]/5 border border-[#ff5c00]/10 rounded-xl">
+                    <div class="text-2xl font-extrabold font-outfit text-[#ff5c00]" id="admin-stat-progress">0</div>
+                    <div class="text-xs font-bold text-slate-500 mt-1">Đang xử lý</div>
+                  </div>
+                  <div class="p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl">
+                    <div class="text-2xl font-extrabold font-outfit text-amber-600" id="admin-stat-pending">0</div>
+                    <div class="text-xs font-bold text-slate-500 mt-1">Có bước Pending</div>
+                  </div>
+                </div>
+                <!-- Users in system -->
+                <div>
+                  <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Người dùng đã tạo hồ sơ</h4>
+                  <div id="admin-users-breakdown" class="space-y-2">
+                    <!-- Rendered dynamically -->
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-auto border-t border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/60 py-6 text-center text-xs text-slate-500">
+      <div class="max-w-7xl mx-auto px-4">
+        <p>© 2026 GiaoHangNhanh (GHN). DATS - Document Approval Tracking System.</p>
+        <p class="mt-1 text-slate-400 text-[10px]">Powered by Supabase · Hệ thống nội bộ công ty</p>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: ADD DOCUMENT -->
+  <!-- ============================================================ -->
+  <div id="add-modal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" onclick="closeModal('add-modal')"></div>
+    <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
+      <div class="relative transform overflow-hidden rounded-2xl bg-white dark:bg-slate-850 text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg border border-slate-200 dark:border-slate-850">
+        <!-- Header -->
+        <div class="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <h3 class="text-lg font-bold text-[#ff5c00] font-outfit flex items-center gap-2">
+            <i data-lucide="file-plus-2" class="w-5 h-5"></i>
+            Thêm Hồ Sơ Trình Ký Mới
+          </h3>
+          <button onclick="closeModal('add-modal')" class="text-slate-400 hover:text-slate-650 dark:hover:text-white rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <!-- Body Form -->
+        <form id="add-form" onsubmit="handleAddSubmit(event)" class="px-6 py-5 space-y-4">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="space-y-1.5">
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-300">Loại hồ sơ <span class="text-red-500">*</span></label>
+              <select id="add-loaiHS" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100">
+                <option value="Hợp Đồng">Hợp Đồng</option>
+                <option value="Phụ Lục">Phụ Lục</option>
+                <option value="BBTL">BBTL</option>
+              </select>
+            </div>
+            <div class="space-y-1.5">
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-300">Ngày nhận <span class="text-red-500">*</span></label>
+              <input type="date" id="add-ngayNhan" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="space-y-1.5">
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-300">Vùng miền <span class="text-red-500">*</span></label>
+              <select id="add-vung" required onchange="onAddRegionChange()" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100">
+                <option value="Miền Bắc">Miền Bắc</option>
+                <option value="Miền Trung">Miền Trung</option>
+                <option value="Miền Nam">Miền Nam</option>
+              </select>
+            </div>
+            <div class="space-y-1.5">
+              <label class="block text-xs font-bold text-slate-500 dark:text-slate-300">Tỉnh thành <span class="text-red-500">*</span></label>
+              <select id="add-tinh" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100">
+              </select>
+            </div>
+          </div>
+          <!-- Sender (auto-filled, readonly for BP VH) -->
+          <div class="space-y-1.5">
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-300">Người gửi <span class="text-red-500">*</span></label>
+            <input type="text" id="add-nguoiGui" required placeholder="Nhập tên người gửi..." class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100 placeholder-slate-400">
+          </div>
+          <div class="space-y-1.5">
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-300">Nhà cung cấp (NCC) <span class="text-red-500">*</span></label>
+            <input type="text" id="add-ncc" required placeholder="Nhập tên nhà cung cấp..." class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100 placeholder-slate-400">
+          </div>
+          <div class="space-y-1.5">
+            <label class="block text-xs font-bold text-slate-500 dark:text-slate-300">Nội dung tóm tắt <span class="text-red-500">*</span></label>
+            <textarea id="add-noiDung" required rows="2" placeholder="Mô tả nội dung hồ sơ..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100 placeholder-slate-400"></textarea>
+          </div>
+          <div class="space-y-1.5">
+            <label class="block text-xs font-bold text-[#ff5c00] flex items-center gap-1.5">
+              <i data-lucide="truck" class="w-3.5 h-3.5"></i>
+              Mã vận đơn GHN <span class="text-red-500">*</span>
+            </label>
+            <input type="text" id="add-docCode" required placeholder="Ví dụ: GHN982347123" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] text-slate-800 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100 placeholder-slate-400 font-bold uppercase">
+            <p class="text-[10px] text-slate-400">Nhập mã vận đơn GHN để gửi về cho AM sau khi hồ sơ hoàn tất.</p>
+          </div>
+          <div class="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
+            <button type="button" onclick="closeModal('add-modal')" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-650 rounded-lg text-sm font-semibold transition-colors dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300">Hủy</button>
+            <button type="submit" class="px-4 py-2 bg-[#ff5c00] hover:bg-[#e04f00] text-white rounded-lg text-sm font-semibold transition-colors shadow-md shadow-[#ff5c00]/10">Lưu hồ sơ</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: UPDATE PROGRESS -->
+  <!-- ============================================================ -->
+  <div id="progress-modal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" onclick="closeModal('progress-modal')"></div>
+    <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
+      <div class="relative transform overflow-hidden rounded-2xl bg-white dark:bg-slate-850 text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg border border-slate-200 dark:border-slate-800">
+        <!-- Header -->
+        <div class="bg-slate-50 dark:bg-slate-900 px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <h3 class="text-lg font-bold text-[#ff5c00] font-outfit flex items-center gap-2">
+            <i data-lucide="git-commit" class="w-5 h-5"></i>
+            Cập Nhật Tiến Độ Trình Ký
+          </h3>
+          <button onclick="closeModal('progress-modal')" class="text-slate-400 hover:text-slate-650 dark:hover:text-white rounded-lg p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <!-- Body Form -->
+        <form id="progress-form" onsubmit="handleProgressSubmit(event)" class="px-6 py-5 space-y-5">
+          <!-- Doc info card -->
+          <div class="bg-orange-50/20 border border-orange-100 rounded-xl p-3.5 text-xs space-y-2 dark:bg-slate-900/60 dark:border-slate-800">
+            <div id="prog-receive-banner" class="hidden rounded-xl border-2 border-amber-300 bg-amber-50 px-5 py-4 text-center dark:bg-amber-500/10 dark:border-amber-500/30">
+              <div class="flex flex-col items-center gap-3">
+                <div class="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center">
+                  <i data-lucide="shield-alert" class="w-6 h-6 text-amber-600 dark:text-amber-400"></i>
+                </div>
+                <div>
+                  <p class="text-sm font-extrabold text-amber-800 dark:text-amber-300">Hồ sơ chưa được tiếp nhận</p>
+                  <p class="text-[11px] text-amber-600 dark:text-amber-400 mt-1">Bạn cần xác nhận đã nhận hồ sơ trước khi cập nhật tiến độ trình ký.</p>
+                </div>
+                <button type="button" onclick="markAsReceivedFromModal()" class="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 flex items-center gap-2">
+                  <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+                  Xác nhận đã nhận
+                </button>
+              </div>
+            </div>
+            <div id="prog-locked-banner" class="hidden rounded-xl border-2 border-emerald-400 bg-emerald-50 px-5 py-4 text-center dark:bg-emerald-500/10 dark:border-emerald-500/40">
+              <div class="flex flex-col items-center gap-3">
+                <div class="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
+                  <i data-lucide="lock" class="w-7 h-7 text-emerald-600 dark:text-emerald-400"></i>
+                </div>
+                <div>
+                  <p class="text-base font-extrabold text-emerald-700 dark:text-emerald-300">✅ Đã hoàn thành · Hồ sơ đã khóa 🔒</p>
+                  <p class="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">Hồ sơ này đã hoàn tất quy trình và bị khóa. Chỉ được phép <strong>XEM</strong> thông tin, không thể chỉnh sửa.</p>
+                </div>
+              </div>
+            </div>
+            <div class="flex justify-between items-center">
+              <span id="prog-id-badge" class="px-2 py-0.5 rounded-md bg-[#ff5c00]/10 text-[#ff5c00] font-bold border border-[#ff5c00]/20">STT 1</span>
+              <span id="prog-type" class="font-bold text-[#005691] dark:text-blue-400">Hợp Đồng</span>
+            </div>
+            <div>
+              <span class="text-slate-400 font-bold">Nội dung: </span>
+              <span id="prog-noidung" class="text-slate-700 font-bold dark:text-slate-200">Biên bản thanh lý mặt bằng Q1</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 border-t border-slate-100 dark:border-slate-800/40 pt-2 text-[11px] text-slate-400">
+              <div>Người gửi: <span id="prog-nguoigui" class="text-slate-650 font-semibold dark:text-slate-300">Nguyễn Văn A</span></div>
+              <div>Đối tác: <span id="prog-ncc" class="text-slate-650 font-semibold dark:text-slate-300">NCC Nhất Tín</span></div>
+            </div>
+          </div>
+
+          <!-- Step Progression Checklist -->
+          <div class="space-y-4">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Quy trình duyệt hồ sơ</h4>
+            
+            <!-- Step 1 -->
+            <div class="flex items-start gap-4 p-3 bg-slate-50 border border-slate-200 hover:border-slate-300 dark:bg-slate-900/20 dark:border-slate-800/40 rounded-xl transition-all">
+              <div class="pt-0.5 flex flex-col gap-2">
+                <input type="checkbox" id="prog-step1-checked" onchange="onStepCheckboxChange(1)" class="w-4 h-4 rounded text-[#ff5c00] focus:ring-[#ff5c00] cursor-pointer">
+                <span class="text-[9px] font-bold text-slate-400">Duyệt</span>
+              </div>
+              <div class="flex-1 space-y-1">
+                <div class="flex justify-between items-center">
+                  <label for="prog-step1-checked" class="text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer">Step 1 - BP Mặt bằng</label>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-slate-450 font-bold">Bộ phận 1</span>
+                    <label class="admin-only-flex items-center gap-1 cursor-pointer">
+                      <input type="checkbox" id="prog-step1-pending" onchange="onStepPendingChange(1)" class="w-3.5 h-3.5 rounded text-amber-500 focus:ring-amber-500 border-slate-300 cursor-pointer">
+                      <span class="text-[10px] font-bold text-amber-600">Pending</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 pt-1">
+                  <span class="text-xs text-slate-500">Ngày duyệt:</span>
+                  <input type="date" id="prog-step1-date" class="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#ff5c00] dark:bg-slate-900 dark:border-slate-800 dark:text-slate-200 disabled:opacity-50">
+                </div>
+                <div id="prog-step1-reason-container" class="hidden pt-1.5 space-y-1">
+                  <label class="block text-[10px] font-bold text-amber-600">Lý do Pending <span class="text-red-500">*</span></label>
+                  <input type="text" id="prog-step1-reason" placeholder="Nhập lý do tạm hoãn..." class="w-full px-2 py-1 bg-amber-500/5 border border-amber-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-800 dark:text-slate-200">
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="flex items-start gap-4 p-3 bg-slate-50 border border-slate-200 hover:border-slate-300 dark:bg-slate-900/20 dark:border-slate-800/40 rounded-xl transition-all">
+              <div class="pt-0.5 flex flex-col gap-2">
+                <input type="checkbox" id="prog-step2-checked" onchange="onStepCheckboxChange(2)" class="w-4 h-4 rounded text-[#ff5c00] focus:ring-[#ff5c00] cursor-pointer">
+                <span class="text-[9px] font-bold text-slate-400">Duyệt</span>
+              </div>
+              <div class="flex-1 space-y-1">
+                <div class="flex justify-between items-center">
+                  <label for="prog-step2-checked" class="text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer">Step 2 - BP Kế toán</label>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-slate-450 font-bold">Bộ phận 2</span>
+                    <label class="admin-only-flex items-center gap-1 cursor-pointer">
+                      <input type="checkbox" id="prog-step2-pending" onchange="onStepPendingChange(2)" class="w-3.5 h-3.5 rounded text-amber-500 focus:ring-amber-500 border-slate-300 cursor-pointer">
+                      <span class="text-[10px] font-bold text-amber-600">Pending</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 pt-1">
+                  <span class="text-xs text-slate-500">Ngày duyệt:</span>
+                  <input type="date" id="prog-step2-date" class="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#ff5c00] dark:bg-slate-900 dark:border-slate-800 dark:text-slate-200 disabled:opacity-50">
+                </div>
+                <div id="prog-step2-reason-container" class="hidden pt-1.5 space-y-1">
+                  <label class="block text-[10px] font-bold text-amber-600">Lý do Pending <span class="text-red-500">*</span></label>
+                  <input type="text" id="prog-step2-reason" placeholder="Nhập lý do tạm hoãn..." class="w-full px-2 py-1 bg-amber-500/5 border border-amber-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-800 dark:text-slate-200">
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="flex items-start gap-4 p-3 bg-slate-50 border border-slate-200 hover:border-slate-300 dark:bg-slate-900/20 dark:border-slate-800/40 rounded-xl transition-all">
+              <div class="pt-0.5 flex flex-col gap-2">
+                <input type="checkbox" id="prog-step3-checked" onchange="onStepCheckboxChange(3)" class="w-4 h-4 rounded text-[#ff5c00] focus:ring-[#ff5c00] cursor-pointer">
+                <span class="text-[9px] font-bold text-slate-400">Duyệt</span>
+              </div>
+              <div class="flex-1 space-y-1">
+                <div class="flex justify-between items-center">
+                  <label for="prog-step3-checked" class="text-sm font-semibold text-slate-700 dark:text-slate-200 cursor-pointer">Step 3 - BP Pháp lý</label>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-slate-450 font-bold">Bộ phận 3</span>
+                    <label class="admin-only-flex items-center gap-1 cursor-pointer">
+                      <input type="checkbox" id="prog-step3-pending" onchange="onStepPendingChange(3)" class="w-3.5 h-3.5 rounded text-amber-500 focus:ring-amber-500 border-slate-300 cursor-pointer">
+                      <span class="text-[10px] font-bold text-amber-600">Pending</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 pt-1">
+                  <span class="text-xs text-slate-500">Ngày duyệt:</span>
+                  <input type="date" id="prog-step3-date" class="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#ff5c00] dark:bg-slate-900 dark:border-slate-800 dark:text-slate-200 disabled:opacity-50">
+                </div>
+                <div id="prog-step3-reason-container" class="hidden pt-1.5 space-y-1">
+                  <label class="block text-[10px] font-bold text-amber-600">Lý do Pending <span class="text-red-500">*</span></label>
+                  <input type="text" id="prog-step3-reason" placeholder="Nhập lý do tạm hoãn..." class="w-full px-2 py-1 bg-amber-500/5 border border-amber-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-800 dark:text-slate-200">
+                </div>
+              </div>
+            </div>
+
+            <!-- Final: COO -->
+            <div class="flex items-start gap-4 p-3 bg-orange-50/10 border border-orange-100 hover:border-[#ff5c00]/30 dark:bg-slate-900/20 dark:border-slate-800/80 rounded-xl transition-all">
+              <div class="pt-0.5 flex flex-col gap-2">
+                <input type="checkbox" id="prog-step4-checked" onchange="onStepCheckboxChange(4)" class="w-4 h-4 rounded text-[#ff5c00] focus:ring-[#ff5c00] cursor-pointer">
+                <span class="text-[9px] font-bold text-[#ff5c00]">Duyệt</span>
+              </div>
+              <div class="flex-1 space-y-1">
+                <div class="flex justify-between items-center">
+                  <label for="prog-step4-checked" class="text-sm font-bold text-[#ff5c00] cursor-pointer flex items-center gap-1">
+                    <i data-lucide="crown" class="w-3.5 h-3.5"></i>
+                    Final - COO Giám đốc Mai Hoàng
+                  </label>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-slate-450 font-bold">Phê duyệt cuối</span>
+                    <label class="admin-only-flex items-center gap-1 cursor-pointer">
+                      <input type="checkbox" id="prog-step4-pending" onchange="onStepPendingChange(4)" class="w-3.5 h-3.5 rounded text-amber-500 focus:ring-amber-500 border-slate-300 cursor-pointer">
+                      <span class="text-[10px] font-bold text-amber-600">Pending</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 pt-1">
+                  <span class="text-xs text-slate-500">Ngày duyệt:</span>
+                  <input type="date" id="prog-step4-date" class="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#ff5c00] dark:bg-slate-900 dark:border-slate-800 dark:text-slate-200 disabled:opacity-50">
+                </div>
+                <div id="prog-step4-reason-container" class="hidden pt-1.5 space-y-1">
+                  <label class="block text-[10px] font-bold text-amber-600">Lý do Pending <span class="text-red-500">*</span></label>
+                  <input type="text" id="prog-step4-reason" placeholder="Nhập lý do tạm hoãn..." class="w-full px-2 py-1 bg-amber-500/5 border border-amber-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-800 dark:text-slate-200">
+                </div>
+              </div>
+            </div>
+
+            <!-- GHN Tracking code input -->
+            <div id="prog-docCode-wrapper" class="hidden p-4 bg-orange-50/10 border border-orange-100 dark:bg-slate-900/40 dark:border-slate-800 rounded-xl space-y-2.5">
+              <label for="prog-docCode" class="block text-xs font-bold text-[#ff5c00] flex items-center gap-1.5">
+                <i data-lucide="truck" class="w-4 h-4"></i>
+                Mã vận đơn GHN (Gửi về cho AM) <span class="text-red-500">*</span>
+              </label>
+              <div class="flex gap-2">
+                <input type="text" id="prog-docCode" onclick="openTrackingPageFromInput()" placeholder="Ví dụ: GHN982347123" class="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5c00] dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100 placeholder-slate-400 font-bold uppercase">
+                <a id="prog-docCode-link" href="https://ghn.vn/blogs/trang-thai-don-hang" target="_blank" rel="noopener noreferrer" class="px-3.5 py-2 bg-[#ff5c00] hover:bg-[#e04f00] text-white rounded-xl text-xs font-bold transition-colors inline-flex items-center justify-center">Tra cứu</a>
+              </div>
+              <p class="text-[10px] text-slate-400">Nhập mã vận đơn của GHN cho hồ sơ đã phê duyệt hoàn tất. Có thể click vào nút Tra cứu để xem trạng thái đơn hàng.</p>
+            </div>
+          </div>
+
+          <input type="hidden" id="prog-doc-id">
+
+          <div class="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
+            <button type="button" id="prog-close-btn" onclick="closeModal('progress-modal')" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-650 rounded-lg text-sm font-semibold transition-colors dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300">Đóng</button>
+            <button type="submit" id="prog-submit-btn" class="px-5 py-2 bg-gradient-to-r from-[#ff5c00] to-[#ff3300] hover:from-[#e04f00] hover:to-[#e02e00] text-white rounded-lg text-sm font-semibold transition-colors shadow-md shadow-[#ff5c00]/10">Lưu tiến độ</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lucide Icon Library -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- ============================================================ -->
+  <!-- APP BUSINESS LOGIC (SUPABASE VERSION) -->
+  <!-- ============================================================ -->
+  <script>
+    // ========== SUPABASE CLIENT ==========
+    // Lấy từ supabase-config.js (được load trước)
+    // Nếu chưa được cấu hình, sẽ hiện thông báo lỗi
+    let sb = null;
+    try {
+      if (typeof supabaseClient !== 'undefined') {
+        sb = supabaseClient;
+      }
+    } catch (e) {
+      console.error('Supabase chưa được cấu hình:', e);
+    }
+
+    // ========== CONSTANTS ==========
+    const GHN_DOMAIN = '@ghn.vn';
+
+    // ========== PROVINCES DATABASE ==========
+    const provincesDatabase = {
+      'Miền Bắc': ['Hà Nội', 'Hải Phòng', 'Bắc Ninh', 'Hà Nam', 'Hải Dương', 'Hưng Yên', 'Nam Định', 'Ninh Bình', 'Thái Bình', 'Vĩnh Phúc', 'Bắc Giang', 'Quảng Ninh', 'Lạng Sơn', 'Cao Bằng', 'Hà Giang', 'Lào Cai', 'Bắc Kạn', 'Phú Thọ', 'Điện Biên', 'Lai Châu', 'Sơn La'],
+      'Miền Trung': ['Đà Nẵng', 'Thừa Thiên Huế', 'Thanh Hóa', 'Nghệ An', 'Hà Tĩnh', 'Quảng Bình', 'Quảng Trị', 'Quảng Ngãi', 'Bình Định', 'Phú Yên', 'Khánh Hòa', 'Ninh Thuận', 'Bình Thuận', 'Kon Tum', 'Gia Lai', 'Đắk Lắk', 'Đắk Nông', 'Lâm Đồng', 'Quảng Nam'],
+      'Miền Nam': ['Hồ Chí Minh', 'Cần Thơ', 'Bình Phước', 'Bình Dương', 'Đồng Nai', 'Tây Ninh', 'Bà Rịa - Vũng Tàu', 'Long An', 'Tiền Giang', 'Bến Tre', 'Trà Vinh', 'Vĩnh Long', 'Đồng Tháp', 'An Giang', 'Kiên Giang', 'Hậu Giang', 'Sóc Trăng', 'Bạc Liêu', 'Cà Mau']
+    };
+
+    // ========== APP STATE ==========
+    let hoSoList = [];
+    let allHoSoRaw = [];      // Dữ liệu thô từ DB (chưa join steps)
+    let allStepsRaw = [];     // Tất cả steps từ DB
+    let adminList = [];
+    let currentSort = { column: 'stt', order: 'asc' };
+    let currentRole = null;       // 'BP Vận hành' | 'Admin'
+    let currentUserName = null;
+    let currentUserEmail = null;
+    let currentUserId = null;
+    let activeTab = 'operations';
+    let currentWorkflowTab = 'waiting';
+    let realtimeChannel = null;
+    let dataLoaded = false;
+
+    // ========== UTILITY: HIỂN/ẨN LOADING ==========
+    function showLoading() {
+      document.getElementById('loading-overlay').classList.remove('hidden');
+    }
+    function hideLoading() {
+      setTimeout(() => {
+        document.getElementById('loading-overlay').classList.add('hidden');
+      }, 300);
+    }
+
+    // ========== UTILITY: THEME ==========
+    function initTheme() {
+      const themeToggle = document.getElementById('theme-toggle');
+      const sunIcon = document.getElementById('sun-icon');
+      const moonIcon = document.getElementById('moon-icon');
+      const isDark = localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        sunIcon.classList.remove('hidden');
+        moonIcon.classList.add('hidden');
+      } else {
+        document.documentElement.classList.remove('dark');
+        sunIcon.classList.add('hidden');
+        moonIcon.classList.remove('hidden');
+      }
+
+      themeToggle.addEventListener('click', () => {
+        if (document.documentElement.classList.contains('dark')) {
+          document.documentElement.classList.remove('dark');
+          localStorage.setItem('theme', 'light');
+          sunIcon.classList.add('hidden');
+          moonIcon.classList.remove('hidden');
+        } else {
+          document.documentElement.classList.add('dark');
+          localStorage.setItem('theme', 'dark');
+          sunIcon.classList.remove('hidden');
+          moonIcon.classList.add('hidden');
+        }
+        applyFilters();
+      });
+    }
+
+    // ========== AUTH / GOOGLE LOGIN ==========
+    async function handleGoogleLogin() {
+      const btn = document.getElementById('google-login-btn');
+      btn.classList.add('disabled-state');
+      try {
+        // Kiểm tra cấu hình Supabase
+        if (!sb) {
+          showLoginError('Cấu hình Supabase chưa được thiết lập. Vui lòng kiểm tra file supabase-config.js');
+          btn.classList.remove('disabled-state');
+          return;
+        }
+
+        const redirectTo = window.location.origin;
+
+        const { data, error } = await sb.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: redirectTo,
+            queryParams: {
+              hd: 'ghn.vn'  // Bắt Google chỉ login bằng workspace ghn.vn (nếu cấu hình được)
+            }
+          }
+        });
+        
+        if (error) {
+          showLoginError('Không thể kết nối đến Google. Vui lòng thử lại: ' + error.message);
+        }
+        // Nếu thành công, Supabase sẽ redirect sang Google
+      } catch (err) {
+        showLoginError('Lỗi đăng nhập: ' + err.message);
+      } finally {
+        btn.classList.remove('disabled-state');
+      }
+    }
+
+    function showLoginError(msg) {
+      const errorEl = document.getElementById('login-error');
+      const errorText = document.getElementById('login-error-text');
+      errorText.textContent = msg;
+      errorEl.classList.remove('hidden');
+      errorEl.style.display = 'flex';
+    }
+
+    // ========== SESSION HANDLING ==========
+    async function handleAuthCallback() {
+      // Xử lý khi Google redirect về với session token
+      try {
+        if (!sb) return;
+
+        const { data: { session }, error } = await sb.auth.getSession();
+        if (error) throw error;
+
+        if (session) {
+          const user = session.user;
+          const email = user.email || '';
+          const name = user.user_metadata?.full_name || user.user_metadata?.name || email.split('@')[0];
+
+          // Kiểm tra domain @ghn.vn
+          if (!email.toLowerCase().endsWith(GHN_DOMAIN)) {
+            await sb.auth.signOut();
+            showLoginError(`Email ${email} không thuộc domain ${GHN_DOMAIN}. Vui lòng dùng email công ty GHN.`);
+            hideLoading();
+            return;
+          }
+
+          // Lấy thông tin user + admin list
+          currentUserEmail = email.toLowerCase();
+          currentUserName = name;
+          currentUserId = user.id;
+
+          await loadAdminList();
+          await bootApp(user);
+        } else {
+          hideLoading();
+        }
+      } catch (err) {
+        console.error('Auth callback error:', err);
+        hideLoading();
+      }
+    }
+
+    // ========== LOAD ADMIN LIST ==========
+    async function loadAdminList() {
+      if (!sb) return;
+      try {
+        const { data, error } = await sb.from('admin_list').select('*');
+        if (error) throw error;
+        adminList = data || [];
+      } catch (err) {
+        console.error('Không tải được admin list:', err);
+        adminList = [];
+      }
+    }
+
+    function isAdminEmail(email) {
+      return adminList.some(a => a.email.toLowerCase() === email.toLowerCase());
+    }
+
+    function isSuperAdmin(email) {
+      const admin = adminList.find(a => a.email.toLowerCase() === email.toLowerCase());
+      return admin && admin.is_super_admin === true;
+    }
+
+    // ========== LOAD DATA FROM SUPABASE ==========
+    async function loadAllData() {
+      if (!sb) return [];
+      try {
+        // Lấy hồ sơ (giới hạn 1000 dòng/lần để tránh quá tải bandwidth)
+        // RLS sẽ tự lọc theo role người dùng
+        const { data: hoSoData, error: hoSoError } = await sb
+          .from('ho_so')
+          .select('*')
+          .order('stt', { ascending: true })
+          .limit(1000);
+
+        if (hoSoError) throw hoSoError;
+
+        // Lấy steps của các hồ sơ đã load
+        let stepsData = [];
+        if (hoSoData && hoSoData.length > 0) {
+          const hoSoIds = hoSoData.map(d => d.id);
+          const { data: stepsDataResult, error: stepsError } = await sb
+            .from('ho_so_steps')
+            .select('*')
+            .in('ho_so_id', hoSoIds);
+
+          if (stepsError) throw stepsError;
+          stepsData = stepsDataResult || [];
+        }
+
+        allHoSoRaw = hoSoData || [];
+        allStepsRaw = stepsData || [];
+
+        // Merge steps vào ho_so
+        hoSoList = mergeHoSoWithSteps(allHoSoRaw, allStepsRaw);
+
+        dataLoaded = true;
+        return hoSoList;
+      } catch (err) {
+        console.error('Không tải được dữ liệu:', err);
+        showToast('Không thể tải dữ liệu từ máy chủ. Vui lòng kiểm tra kết nối!', 'warning');
+        return [];
+      }
+    }
+
+    function mergeHoSoWithSteps(hoSoData, stepsData) {
+      return hoSoData.map(doc => {
+        const docSteps = stepsData.filter(s => Number(s.ho_so_id) === Number(doc.id));
+        const getStep = (num) => {
+          const step = docSteps.find(s => s.step_num === num);
+          return step ? {
+            status: step.status || 'Pending',
+            date: step.date || null,
+            reason: step.reason || null
+          } : { status: 'Pending', date: null, reason: null };
+        };
+
+        return {
+          id: String(doc.id),
+          dtId: doc.id, // database id thật
+          stt: doc.stt,
+          loaiHS: doc.loai_hs,
+          vung: doc.vung,
+          tinh: doc.tinh,
+          nguoiGui: doc.nguoi_gui,
+          nguoiGuiEmail: doc.nguoi_gui_email,
+          ncc: doc.ncc,
+          noiDung: doc.noi_dung,
+          ngayNhan: doc.ngay_nhan,
+          docCode: doc.doc_code || '',
+          trangThaiTongThe: doc.trang_thai || 'In Progress',
+          adminReceived: doc.admin_received || false,
+          adminReceivedDate: doc.admin_received_date,
+          adminReceivedTime: doc.admin_received_time,
+          locked: doc.locked || false,
+          steps: {
+            step1: getStep(1),
+            step2: getStep(2),
+            step3: getStep(3),
+            final: getStep(4)
+          }
+        };
+      });
+    }
+
+    // ========== REALTIME SUBSCRIPTION ==========
+    function setupRealtime() {
+      if (!sb) return;
+
+      // Nếu đã có channel cũ, xóa đi
+      if (realtimeChannel) {
+        sb.removeChannel(realtimeChannel);
+      }
+
+      realtimeChannel = sb
+        .channel('dats-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'ho_so' },
+          async (payload) => {
+            console.log('Realtime change detected:', payload.eventType);
+            // Tải lại dữ liệu
+            await loadAllData();
+            renderDashboard();
+            if (activeTab === 'admin' && currentRole === 'Admin') {
+              renderAdminPanel();
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            const connStatus = document.getElementById('conn-status');
+            if (connStatus) {
+              connStatus.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span><span>Đã kết nối</span>';
+            }
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            const connStatus = document.getElementById('conn-status');
+            if (connStatus) {
+              connStatus.className = 'hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20';
+              connStatus.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-red-500"></span><span>Mất kết nối</span>';
+            }
+          }
+        });
+    }
+
+    // ========== BOOT APP ==========
+    async function bootApp(user) {
+      // Xác định role
+      currentRole = isAdminEmail(currentUserEmail) ? 'Admin' : 'BP Vận hành';
+
+      // Ẩn login, hiện app
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('app-wrapper').classList.remove('hidden');
+
+      // Update header
+      updateHeaderUserInfo();
+
+      // Init theme
+      initTheme();
+
+      // Init filters
+      initFilterDropdowns();
+      onAddRegionChange();
+
+      // Load data từ Supabase
+      const data = await loadAllData();
+
+      // Apply role UI
+      applyRoleUI();
+
+      // Render
+      renderDashboard();
+      lucide.createIcons();
+
+      // Setup realtime
+      setupRealtime();
+
+      // Hide loading
+      hideLoading();
+
+      // Kiểm tra query params để migrate dữ liệu cũ (chỉ superadmin)
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('migrate') === '1' && isSuperAdmin(currentUserEmail)) {
+        await migrateLocalStorageToSupabase();
+      }
+    }
+
+    // ========== LOGOUT ==========
+    async function handleLogout() {
+      if (sb) {
+        await sb.auth.signOut();
+      }
+      // Reset state
+      currentRole = null;
+      currentUserName = null;
+      currentUserEmail = null;
+      currentUserId = null;
+      hoSoList = [];
+      adminList = [];
+
+      // Xóa realtime channel
+      if (realtimeChannel) {
+        sb.removeChannel(realtimeChannel);
+        realtimeChannel = null;
+      }
+
+      // Show login screen
+      document.getElementById('login-screen').classList.remove('hidden');
+      document.getElementById('app-wrapper').classList.add('hidden');
+
+      // Hide admin panel, reset
+      document.getElementById('admin-panel').style.display = 'none';
+      document.getElementById('ops-panel').style.display = 'block';
+
+      // Clear data
+      document.getElementById('table-body').innerHTML = '';
+      document.getElementById('stat-total').textContent = '0';
+      document.getElementById('stat-done').textContent = '0';
+      document.getElementById('stat-in-progress').textContent = '0';
+      document.getElementById('stat-rate-text').textContent = '0%';
+      document.getElementById('stat-rate-bar').style.width = '0%';
+      document.getElementById('displayed-count').textContent = '0';
+      document.getElementById('total-count').textContent = '0';
+
+      showToast('Đã đăng xuất khỏi hệ thống!', 'info');
+    }
+
+    // ========== APPLY ROLE UI ==========
+    function applyRoleUI() {
+      const isAdmin = (currentRole === 'Admin');
+      const isSA = isSuperAdmin(currentUserEmail);
+      const tabNav = document.getElementById('role-navigation-tabs');
+      const addDocBtn = document.getElementById('add-doc-btn');
+      const exportBtn = document.getElementById('export-btn');
+
+      if (isAdmin) {
+        // Admin sees tab navigation
+        tabNav.classList.remove('hidden');
+        // Admin also can create records like BP Vận hành
+        if (addDocBtn) addDocBtn.classList.remove('hidden');
+        // Export button visible for admin
+        exportBtn.classList.remove('hidden');
+        exportBtn.classList.add('flex');
+        // Update tab labels
+        document.getElementById('tab-operations').innerHTML = '<i data-lucide="file-text" class="w-4 h-4 inline-block mr-1"></i> Tất cả hồ sơ';
+        currentWorkflowTab = 'waiting';
+        // Set default tab for admin
+        switchTab('operations');
+        setTimeout(() => setWorkflowTab('waiting'), 0);
+      } else {
+        tabNav.classList.add('hidden');
+        if (addDocBtn) addDocBtn.classList.remove('hidden');
+        exportBtn.classList.add('hidden');
+        exportBtn.classList.remove('flex');
+        switchTab('operations');
+      }
+
+      // Pre-fill "Người gửi" with current user name
+      const nguoiGuiInput = document.getElementById('add-nguoiGui');
+      if (nguoiGuiInput) {
+        nguoiGuiInput.value = currentUserName;
+        if (!isAdmin) {
+          nguoiGuiInput.readOnly = true;
+          nguoiGuiInput.classList.add('opacity-70', 'cursor-not-allowed');
+        } else {
+          nguoiGuiInput.readOnly = false;
+          nguoiGuiInput.classList.remove('opacity-70', 'cursor-not-allowed');
+        }
+      }
+    }
+
+    function updateHeaderUserInfo() {
+      const avatarEl = document.getElementById('header-avatar');
+      const usernameEl = document.getElementById('header-username');
+      const roleBadgeEl = document.getElementById('header-role-badge');
+      const isSA = isSuperAdmin(currentUserEmail);
+
+      // Initials for avatar
+      const initials = currentUserName.split(' ').map(w => w[0]).slice(-2).join('').toUpperCase();
+      avatarEl.textContent = initials;
+      usernameEl.textContent = currentUserName;
+
+      if (isSA) {
+        roleBadgeEl.textContent = '⭐ Quản trị viên tối cao';
+        roleBadgeEl.className = 'text-[10px] font-bold text-amber-500';
+      } else if (currentRole === 'Admin') {
+        roleBadgeEl.textContent = '🛡 Admin';
+        roleBadgeEl.className = 'text-[10px] font-bold text-[#005691]';
+      } else {
+        roleBadgeEl.textContent = '👤 BP Vận hành';
+        roleBadgeEl.className = 'text-[10px] font-bold text-[#ff5c00]';
+      }
+    }
+
+    // ========== TAB SWITCHING ==========
+    function switchTab(tabId) {
+      activeTab = tabId;
+      const tabOps = document.getElementById('tab-operations');
+      const tabAdm = document.getElementById('tab-admin');
+      const opsPanel = document.getElementById('ops-panel');
+      const adminPanel = document.getElementById('admin-panel');
+
+      if (tabId === 'admin') {
+        tabAdm.className = "border-[#ff5c00] text-[#ff5c00] dark:text-[#ff5c00] whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm flex items-center gap-2";
+        tabOps.className = "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm flex items-center gap-2";
+        opsPanel.classList.add('hidden-panel');
+        opsPanel.style.display = 'none';
+        adminPanel.style.display = 'block';
+        renderAdminPanel();
+      } else {
+        tabOps.className = "border-[#ff5c00] text-[#ff5c00] dark:text-[#ff5c00] whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm flex items-center gap-2";
+        tabAdm.className = "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 whitespace-nowrap py-4 px-1 border-b-2 font-bold text-sm flex items-center gap-2";
+        opsPanel.style.display = 'block';
+        adminPanel.style.display = 'none';
+        // Update table title
+        const tableTitle = document.getElementById('table-title');
+        if (currentRole === 'Admin') {
+          tableTitle.textContent = 'Tất cả hồ sơ trong hệ thống';
+        } else {
+          tableTitle.textContent = 'Hồ sơ của tôi';
+        }
+        applyFilters();
+      }
+
+      lucide.createIcons();
+    }
+
+    // ========== ADMIN PANEL RENDER ==========
+    function renderAdminPanel() {
+      renderAdminList();
+      renderAdminStats();
+      lucide.createIcons();
+    }
+
+    function renderAdminList() {
+      const container = document.getElementById('admin-list-container');
+      const addSection = document.getElementById('add-admin-section');
+      const isSA = isSuperAdmin(currentUserEmail);
+
+      // Show add form only for superadmin
+      if (isSA) {
+        addSection.classList.remove('hidden');
+      } else {
+        addSection.classList.add('hidden');
+      }
+
+      container.innerHTML = '';
+
+      if (adminList.length === 0) {
+        container.innerHTML = '<div class="p-6 text-center text-xs text-slate-400">Chưa có admin nào.</div>';
+        return;
+      }
+
+      adminList.forEach(admin => {
+        const item = document.createElement('div');
+        item.className = 'flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors';
+
+        const initials = admin.name.split(' ').map(w => w[0]).slice(-2).join('').toUpperCase();
+        const isThisSuperAdmin = admin.is_super_admin === true;
+
+        item.innerHTML = `
+          <div class="flex items-center gap-3">
+            <div class="user-avatar w-9 h-9 text-xs">${initials}</div>
+            <div>
+              <div class="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                ${escapeHtml(admin.name)}
+                ${isThisSuperAdmin ? '<span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">SUPERADMIN</span>' : ''}
+              </div>
+              <div class="text-[11px] text-slate-400">${escapeHtml(admin.email)}</div>
+            </div>
+          </div>
+          ${(isSA && !isThisSuperAdmin) ? 
+            `<button onclick="removeAdmin('${admin.email}')" class="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors" title="Xóa admin này">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+            </button>` : 
+            '<div class="w-8"></div>'
+          }
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function renderAdminStats() {
+      const total = hoSoList.length;
+      const done = hoSoList.filter(i => i.trangThaiTongThe.startsWith('Done')).length;
+      const progress = hoSoList.filter(i => i.trangThaiTongThe === 'In Progress').length;
+      const hasPending = hoSoList.filter(i => {
+        const s = i.steps;
+        return [s.step1, s.step2, s.step3, s.final].some(st => st.status === 'Pending_Reason');
+      }).length;
+
+      document.getElementById('admin-stat-total').textContent = total;
+      document.getElementById('admin-stat-done').textContent = done;
+      document.getElementById('admin-stat-progress').textContent = progress;
+      document.getElementById('admin-stat-pending').textContent = hasPending;
+
+      // Users breakdown
+      const usersMap = {};
+      hoSoList.forEach(i => {
+        if (!usersMap[i.nguoiGui]) usersMap[i.nguoiGui] = { total: 0, done: 0 };
+        usersMap[i.nguoiGui].total++;
+        if (i.trangThaiTongThe.startsWith('Done')) usersMap[i.nguoiGui].done++;
+      });
+
+      const breakdown = document.getElementById('admin-users-breakdown');
+      breakdown.innerHTML = '';
+      Object.entries(usersMap).forEach(([name, stats]) => {
+        const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
+        breakdown.innerHTML += `
+          <div class="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-semibold text-slate-700 dark:text-slate-200">${escapeHtml(name)}</span>
+            </div>
+            <div class="flex items-center gap-3 text-xs">
+              <span class="text-slate-400">${stats.done}/${stats.total} hồ sơ</span>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${pct === 100 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-[#ff5c00]/5 text-[#ff5c00] border border-[#ff5c00]/10'}">${pct}%</span>
+            </div>
+          </div>
+        `;
+      });
+      if (Object.keys(usersMap).length === 0) {
+        breakdown.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Chưa có dữ liệu hồ sơ.</p>';
+      }
+    }
+
+    // ========== ADMIN CRUD ==========
+    async function addAdmin() {
+      if (!isSuperAdmin(currentUserEmail)) {
+        showToast('Chỉ quản trị viên tối cao mới có thể thêm Admin!', 'warning');
+        return;
+      }
+      const name = document.getElementById('new-admin-name').value.trim();
+      const email = document.getElementById('new-admin-email').value.trim().toLowerCase();
+
+      if (!name || !email) {
+        showToast('Vui lòng nhập đầy đủ họ tên và email!', 'warning');
+        return;
+      }
+      if (!email.endsWith(GHN_DOMAIN)) {
+        showToast(`Email admin phải có đuôi ${GHN_DOMAIN}!`, 'warning');
+        return;
+      }
+
+      try {
+        const { error } = await sb.from('admin_list').insert({
+          email: email,
+          name: name,
+          is_super_admin: false
+        });
+
+        if (error) throw error;
+
+        await loadAdminList();
+        renderAdminList();
+        document.getElementById('new-admin-name').value = '';
+        document.getElementById('new-admin-email').value = '';
+        showToast(`Đã thêm ${name} (${email}) vào danh sách Admin!`, 'success');
+      } catch (err) {
+        console.error('Add admin error:', err);
+        showToast('Lỗi thêm Admin: ' + (err.message || 'Không thể thêm'), 'warning');
+      }
+    }
+
+    async function removeAdmin(email) {
+      if (!isSuperAdmin(currentUserEmail)) {
+        showToast('Chỉ quản trị viên tối cao mới có thể xóa Admin!', 'warning');
+        return;
+      }
+      if (isSuperAdmin(email)) {
+        showToast('Không thể xóa tài khoản quản trị viên tối cao!', 'warning');
+        return;
+      }
+
+      const target = adminList.find(a => a.email.toLowerCase() === email.toLowerCase());
+      if (!target) return;
+
+      if (confirm(`Xóa admin "${target.name}" (${target.email}) khỏi hệ thống?`)) {
+        try {
+          const { error } = await sb.from('admin_list').delete().eq('email', email);
+          if (error) throw error;
+
+          await loadAdminList();
+          renderAdminList();
+          showToast(`Đã xóa admin ${target.name} khỏi hệ thống!`, 'info');
+        } catch (err) {
+          console.error('Remove admin error:', err);
+          showToast('Lỗi xóa Admin: ' + (err.message || 'Không thể xóa'), 'warning');
+        }
+      }
+    }
+
+    // ========== APP INITIALIZE ==========
+    window.onload = async function() {
+      showLoading();
+
+      // Kiểm tra cấu hình Supabase
+      if (!sb) {
+        hideLoading();
+        showLoginError('⚠️ Supabase chưa được cấu hình! Vui lòng mở file supabase-config.js và điền SUPABASE_URL và SUPABASE_ANON_KEY.');
+        return;
+      }
+
+      // Ensure login screen is visible initially
+      const loginScreen = document.getElementById('login-screen');
+      loginScreen.classList.remove('hidden');
+
+      // Xử lý callback từ Google OAuth
+      const { data: { session }, error: sessionError } = await sb.auth.getSession();
+      
+      // Lấy code từ URL (nếu có) - khi Google redirect về
+      const urlParams = new URLSearchParams(window.location.search);
+      const hasCode = urlParams.get('code');
+
+      if (session) {
+        // Đã có session → đăng nhập thẳng
+        const user = session.user;
+        const email = user.email || '';
+        const name = user.user_metadata?.full_name || user.user_metadata?.name || email.split('@')[0];
+
+        if (!email.toLowerCase().endsWith(GHN_DOMAIN)) {
+          await sb.auth.signOut();
+          showLoginError(`Email ${email} không thuộc domain ${GHN_DOMAIN}. Vui lòng dùng email công ty GHN.`);
+          hideLoading();
+          return;
+        }
+
+        currentUserEmail = email.toLowerCase();
+        currentUserName = name;
+        currentUserId = user.id;
+
+        await loadAdminList();
+        await bootApp(user);
+      } else if (hasCode) {
+        // Có code từ Google callback, đợi session
+        await handleAuthCallback();
+      } else {
+        // Chưa đăng nhập → hiện login screen
+        hideLoading();
+        document.getElementById('login-screen').classList.remove('hidden');
+      }
+
+      lucide.createIcons();
+    };
+
+    // ========== MODAL HELPERS ==========
+    function openModal(modalId) {
+      const modal = document.getElementById(modalId);
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+      if (modalId === 'add-modal') {
+        document.getElementById('add-form').reset();
+        onAddRegionChange();
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('add-ngayNhan').value = today;
+        // Pre-fill name for both BP VH and Admin
+        document.getElementById('add-nguoiGui').value = currentUserName;
+      }
+      lucide.createIcons();
+    }
+
+    function closeModal(modalId) {
+      const modal = document.getElementById(modalId);
+      modal.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+
+    // ========== FILTER HELPERS ==========
+    function initFilterDropdowns() {
+      onRegionFilterChange();
+    }
+
+    function onRegionFilterChange() {
+      const region = document.getElementById('filter-region').value;
+      const provinceSelect = document.getElementById('filter-province');
+      provinceSelect.innerHTML = '<option value="">Tất cả</option>';
+      if (region && provincesDatabase[region]) {
+        provincesDatabase[region].forEach(tinh => {
+          const opt = document.createElement('option');
+          opt.value = tinh;
+          opt.textContent = tinh;
+          provinceSelect.appendChild(opt);
+        });
+      }
+      applyFilters();
+    }
+
+    function onAddRegionChange() {
+      const region = document.getElementById('add-vung').value;
+      const provinceSelect = document.getElementById('add-tinh');
+      provinceSelect.innerHTML = '';
+      if (region && provincesDatabase[region]) {
+        provincesDatabase[region].forEach((tinh, idx) => {
+          const opt = document.createElement('option');
+          opt.value = tinh;
+          opt.textContent = tinh;
+          if (idx === 0) opt.selected = true;
+          provinceSelect.appendChild(opt);
+        });
+      }
+    }
+
+    // ========== APPLY FILTERS ==========
+    function applyFilters() {
+      if (!currentRole) return; // Not logged in yet
+      const isDark = document.documentElement.classList.contains('dark');
+      const searchQuery = document.getElementById('search-input').value.toLowerCase().trim();
+      const filterType = document.getElementById('filter-type').value;
+      const filterRegion = document.getElementById('filter-region').value;
+      const filterProvince = document.getElementById('filter-province').value;
+      const filterStep = document.getElementById('filter-step').value;
+      const isAdmin = (currentRole === 'Admin');
+
+      // Show/hide filter boxes based on role
+      const typeBox = document.getElementById('filter-type-box');
+      const regionBox = document.getElementById('filter-region-box');
+      const provinceBox = document.getElementById('filter-province-box');
+      const stepBox = document.getElementById('filter-step-box');
+      const searchBox = document.getElementById('filter-search-box');
+
+      if (!isAdmin) {
+        // BP Vận hành: only search
+        typeBox.classList.add('hidden');
+        regionBox.classList.add('hidden');
+        provinceBox.classList.add('hidden');
+        stepBox.classList.add('hidden');
+        searchBox.classList.remove('lg:col-span-2');
+        searchBox.classList.add('lg:col-span-5');
+      } else {
+        typeBox.classList.remove('hidden');
+        regionBox.classList.remove('hidden');
+        provinceBox.classList.remove('hidden');
+        stepBox.classList.remove('hidden');
+        searchBox.classList.remove('lg:col-span-5');
+        searchBox.classList.add('lg:col-span-2');
+      }
+
+      // Filter records
+      const filtered = hoSoList.filter(item => {
+        // BP VH only sees their own records
+        if (!isAdmin && item.nguoiGuiEmail !== currentUserEmail) return false;
+
+        const matchSearch = searchQuery === '' ||
+          item.nguoiGui.toLowerCase().includes(searchQuery) ||
+          item.ncc.toLowerCase().includes(searchQuery) ||
+          item.noiDung.toLowerCase().includes(searchQuery) ||
+          item.id.toLowerCase().includes(searchQuery) ||
+          (item.docCode || '').toLowerCase().includes(searchQuery);
+
+        const matchType = filterType === '' || item.loaiHS === filterType;
+        const matchRegion = filterRegion === '' || item.vung === filterRegion;
+        const matchProvince = filterProvince === '' || item.tinh === filterProvince;
+
+        let matchStep = true;
+        const bucket = getWorkflowBucket(item);
+        if (isAdmin && currentWorkflowTab && currentWorkflowTab !== 'all') {
+          if (currentWorkflowTab === 'waiting') {
+            matchStep = bucket === 'waiting';
+          } else if (currentWorkflowTab === 'in-progress') {
+            matchStep = bucket === 'in-progress';
+          } else if (currentWorkflowTab === 'done') {
+            matchStep = bucket === 'done';
+          }
+        }
+        if (filterStep !== '') {
+          if (filterStep === 'waiting') {
+            matchStep = matchStep && bucket === 'waiting';
+          } else if (filterStep === 'in-progress') {
+            matchStep = matchStep && bucket === 'in-progress';
+          } else if (filterStep === 'done') {
+            matchStep = matchStep && bucket === 'done';
+          }
+        }
+
+        return matchSearch && matchType && matchRegion && matchProvince && matchStep;
+      });
+
+      // Sort
+      filtered.sort((a, b) => {
+        let valA = a[currentSort.column];
+        let valB = b[currentSort.column];
+        if (currentSort.column === 'ngayNhan') {
+          return currentSort.order === 'asc' ? new Date(valA) - new Date(valB) : new Date(valB) - new Date(valA);
+        }
+        if (typeof valA === 'number') return currentSort.order === 'asc' ? valA - valB : valB - valA;
+        return currentSort.order === 'asc' ? valA.toString().localeCompare(valB.toString()) : valB.toString().localeCompare(valA.toString());
+      });
+
+      renderTableRows(filtered, !isDark);
+
+      const myTotal = isAdmin ? hoSoList.length : hoSoList.filter(i => i.nguoiGuiEmail === currentUserEmail).length;
+      document.getElementById('displayed-count').textContent = filtered.length;
+      document.getElementById('total-count').textContent = myTotal;
+    }
+
+    function toggleSort(column) {
+      if (currentSort.column === column) {
+        currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSort.column = column;
+        currentSort.order = 'asc';
+      }
+      const icon = document.getElementById(`sort-icon-${column}`);
+      if (icon) {
+        icon.textContent = currentSort.order === 'asc' ? '↑' : '↓';
+        icon.className = "inline-block ml-1 text-[#ff5c00] font-bold";
+      }
+      applyFilters();
+    }
+
+    function resetFilters() {
+      document.getElementById('search-input').value = '';
+      document.getElementById('filter-type').value = '';
+      document.getElementById('filter-region').value = '';
+      document.getElementById('filter-province').value = '';
+      document.getElementById('filter-step').value = '';
+      currentWorkflowTab = 'waiting';
+      setWorkflowTab('waiting');
+      onRegionFilterChange();
+      showToast('Đặt lại bộ lọc thành công!', 'info');
+    }
+
+    function getWorkflowBucket(item) {
+      const hasDocCode = Boolean((item.docCode || '').trim());
+      const finalApproved = item.steps?.final?.status === 'Approved';
+      if (hasDocCode && finalApproved) return 'done';
+      if (item.adminReceived === false) return 'waiting';
+      return 'in-progress';
+    }
+
+    // ========== RENDER DASHBOARD ==========
+    function renderDashboard() {
+      const isAdmin = (currentRole === 'Admin');
+      const relevantList = isAdmin ? hoSoList : hoSoList.filter(i => i.nguoiGuiEmail === currentUserEmail);
+      const total = relevantList.length;
+      const done = relevantList.filter(i => getWorkflowBucket(i) === 'done').length;
+      const inProgress = relevantList.filter(i => getWorkflowBucket(i) === 'in-progress').length;
+      const waiting = relevantList.filter(i => getWorkflowBucket(i) === 'waiting').length;
+      const rate = total > 0 ? Math.round((done / total) * 100) : 0;
+
+      document.getElementById('stat-total').textContent = total;
+      document.getElementById('stat-done').textContent = done;
+      document.getElementById('stat-in-progress').textContent = inProgress + waiting;
+      document.getElementById('stat-rate-text').textContent = `${rate}%`;
+      document.getElementById('stat-rate-bar').style.width = `${rate}%`;
+
+      applyFilters();
+    }
+
+    function formatDateString(str) {
+      if (!str) return '';
+      const parts = str.split('-');
+      if (parts.length !== 3) return str;
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+
+    // ========== ESCAPE HTML ==========
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str || '';
+      return div.innerHTML;
+    }
+
+    // ========== RENDER TABLE ==========
+    function renderTableRows(items, isLight) {
+      const tbody = document.getElementById('table-body');
+      const emptyState = document.getElementById('empty-state');
+      tbody.innerHTML = '';
+      const isAdmin = (currentRole === 'Admin');
+
+      if (items.length === 0) {
+        emptyState.classList.remove('hidden');
+        return;
+      } else {
+        emptyState.classList.add('hidden');
+      }
+
+      items.forEach(item => {
+        const row = document.createElement('tr');
+        row.className = isLight
+          ? "hover:bg-orange-50/10 border-b border-slate-100 transition-colors"
+          : "hover:bg-slate-800/40 border-b border-slate-800/50 transition-colors";
+
+        const step1 = item.steps.step1;
+        const step2 = item.steps.step2;
+        const step3 = item.steps.step3;
+        const final = item.steps.final;
+        const workflowBucket = getWorkflowBucket(item);
+        const workflowEnabled = item.adminReceived === true;
+        const isStep1Active = workflowEnabled && step1.status === 'Pending';
+        const isStep2Active = workflowEnabled && step1.status === 'Approved' && step2.status === 'Pending';
+        const isStep3Active = workflowEnabled && step2.status === 'Approved' && step3.status === 'Pending';
+        const isFinalActive = workflowEnabled && step3.status === 'Approved' && final.status === 'Pending';
+
+        const conn1 = step1.status === 'Approved' ? 'bg-[#005691]' : 'bg-slate-200 dark:bg-slate-700';
+        const conn2 = step2.status === 'Approved' ? 'bg-[#005691]' : 'bg-slate-200 dark:bg-slate-700';
+        const conn3 = step3.status === 'Approved' ? 'bg-[#005691]' : 'bg-slate-200 dark:bg-slate-700';
+
+        // Check if any step has Pending_Reason
+        const hasPendingReason = [step1, step2, step3, final].some(s => s.status === 'Pending_Reason');
+        const pendingStepLabel = step1.status === 'Pending_Reason' ? 'Step 1 (MB)' :
+                                 step2.status === 'Pending_Reason' ? 'Step 2 (KT)' :
+                                 step3.status === 'Pending_Reason' ? 'Step 3 (PL)' :
+                                 final.status === 'Pending_Reason' ? 'Final (COO)' : '';
+
+        let statusBadge = '';
+        if (item.locked) {
+          statusBadge = `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border-2 border-emerald-300 dark:border-emerald-500/30 shadow-sm shadow-emerald-500/10">
+            <i data-lucide="lock" class="w-3.5 h-3.5"></i>✅ Đã hoàn thành - Hồ sơ đã khóa 🔒
+          </span>`;
+        } else if (hasPendingReason && !isAdmin) {
+          // BP VH sees warning for pending records
+          statusBadge = `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400 border border-red-200 dark:border-red-500/20 animate-pulse shadow-sm shadow-red-500/10" title="Hồ sơ đang tạm dừng tại ${pendingStepLabel}">
+            <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>⚠ Pending: ${pendingStepLabel}
+            <span class="h-2 w-2 rounded-full bg-red-500 animate-ping"></span>
+          </span>`;
+        } else if (workflowBucket === 'done') {
+          statusBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/20">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Đã hoàn thành</span>`;
+        } else if (workflowBucket === 'waiting') {
+          statusBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300 border border-amber-200 dark:border-amber-500/20 animate-pulse">
+            <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Đang chờ</span>`;
+        } else {
+          statusBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-orange-50 text-[#ff5c00] dark:bg-brand-500/10 dark:text-[#ff5c00] border border-orange-100 dark:border-brand-500/20 animate-pulse">
+            <span class="h-1.5 w-1.5 rounded-full bg-[#ff5c00]"></span>Đang trình ký</span>`;
+        }
+
+        let loaiHSBadge = '';
+        if (item.loaiHS === 'Hợp Đồng') loaiHSBadge = '<span class="px-2 py-1 rounded-md text-xs font-bold bg-blue-50 text-blue-600 border border-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20">Hợp Đồng</span>';
+        else if (item.loaiHS === 'Phụ Lục') loaiHSBadge = '<span class="px-2 py-1 rounded-md text-xs font-bold bg-purple-50 text-purple-600 border border-purple-100 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20">Phụ Lục</span>';
+        else loaiHSBadge = '<span class="px-2 py-1 rounded-md text-xs font-bold bg-teal-50 text-teal-600 border border-teal-100 dark:bg-teal-500/10 dark:text-teal-400 dark:border-teal-500/20">BBTL</span>';
+
+        let docCodeCell = '';
+        if (item.docCode) {
+          const ghnLink = `https://donhang.ghn.vn/?order_code=${encodeURIComponent(item.docCode)}`;
+          docCodeCell = `<a href="${ghnLink}" target="_blank" rel="noopener noreferrer" title="Xem hành trình đơn hàng GHN" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all border border-emerald-500 hover:scale-105 shadow-sm">
+            <i data-lucide="truck" class="w-3.5 h-3.5"></i><span>${escapeHtml(item.docCode)}</span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </a>`;
+        } else if (item.steps.final.status === 'Approved') {
+          if (isAdmin) {
+            docCodeCell = `<button onclick="promptAddDocCode('${item.id}')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-[#ff5c00] hover:bg-[#e04f00] transition-all border border-[#ff5c00] hover:scale-105 shadow-sm">
+              <i data-lucide="package-plus" class="w-3.5 h-3.5"></i>Nhập mã vận đơn</button>`;
+          } else {
+            docCodeCell = `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20">
+              <i data-lucide="check" class="w-3.5 h-3.5"></i>Đã hoàn thành</span>`;
+          }
+        } else if (item.adminReceived === false) {
+          docCodeCell = `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-300">
+            <i data-lucide="clock" class="w-3.5 h-3.5"></i>Chưa tiếp nhận</span>`;
+        } else {
+          docCodeCell = `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 bg-slate-50 border border-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-500">
+            <i data-lucide="clock" class="w-3.5 h-3.5"></i>Chờ duyệt xong</span>`;
+        }
+
+        // Action buttons - BP VH: only view progress; Admin: receive -> update -> delete
+        let actionButtons = '';
+        if (item.locked) {
+          // Locked items: chỉ cho phép XEM cho tất cả vai trò
+          actionButtons = `<button onclick="openProgressModal('${item.id}')" class="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 hover:text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/20 rounded-lg transition-colors" title="Xem chi tiết hồ sơ đã khóa">
+            <i data-lucide="eye" class="w-4 h-4"></i>
+          </button>`;
+        } else if (isAdmin && item.adminReceived === false) {
+          actionButtons = `<button onclick="markAsReceived('${item.id}')" class="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 hover:text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/20 rounded-lg transition-colors" title="Đã nhận hồ sơ và bắt đầu trình ký">
+            <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+          </button>`;
+        } else {
+          actionButtons = `<button onclick="openProgressModal('${item.id}')" class="p-2 bg-slate-50 hover:bg-orange-50 text-[#ff5c00] hover:text-[#e04f00] border border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-brand-500 dark:border-slate-700 rounded-lg transition-colors" title="${isAdmin ? 'Cập nhật tiến độ' : 'Xem tiến độ'}">
+            <i data-lucide="${isAdmin && !item.locked ? 'edit-3' : 'eye'}" class="w-4 h-4"></i>
+          </button>`;
+        }
+        if (isAdmin && !item.locked) {
+          actionButtons += `<button onclick="deleteHoSo('${item.id}')" class="p-2 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 border border-slate-200 dark:bg-slate-800 dark:hover:bg-red-950/20 dark:text-slate-400 dark:border-slate-700 rounded-lg transition-colors" title="Xóa hồ sơ">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>`;
+        }
+
+        row.innerHTML = `
+          <td class="py-4 px-6 text-center font-bold text-slate-400 dark:text-slate-500">${item.stt}</td>
+          <td class="py-4 px-4">${loaiHSBadge}</td>
+          <td class="py-4 px-4 font-medium">
+            <div class="text-[10px] text-slate-400 dark:text-slate-500">${escapeHtml(item.vung)}</div>
+            <div class="text-sm font-bold ${isLight ? 'text-slate-700' : 'text-slate-200'}">${escapeHtml(item.tinh)}</div>
+          </td>
+          <td class="py-4 px-4 font-bold ${isLight ? 'text-slate-700' : 'text-slate-200'}">${escapeHtml(item.nguoiGui)}</td>
+          <td class="py-4 px-4 font-bold ${isLight ? 'text-slate-700' : 'text-slate-200'}">${escapeHtml(item.ncc)}</td>
+          <td class="py-4 px-4 text-xs font-normal text-slate-500 dark:text-slate-400 max-w-[240px] truncate" title="${escapeHtml(item.noiDung)}">${escapeHtml(item.noiDung)}</td>
+          <td class="py-4 px-4 font-bold ${isLight ? 'text-slate-650' : 'text-slate-300'}">${formatDateString(item.ngayNhan)}</td>
+          <td class="py-4 px-4">
+            <div class="flex items-center justify-center gap-1 max-w-[300px] mx-auto">
+              ${getStepCircleHTML('MB', step1, isStep1Active)}
+              <div class="h-[2.5px] w-5 sm:w-8 ${conn1} opacity-70"></div>
+              ${getStepCircleHTML('KT', step2, isStep2Active)}
+              <div class="h-[2.5px] w-5 sm:w-8 ${conn2} opacity-70"></div>
+              ${getStepCircleHTML('PL', step3, isStep3Active)}
+              <div class="h-[2.5px] w-5 sm:w-8 ${conn3} opacity-70"></div>
+              ${getStepCircleHTML('COO', final, isFinalActive)}
+            </div>
+          </td>
+          <td class="py-4 px-4 text-center">
+            <div class="space-y-1">
+              <div>${statusBadge}</div>
+              ${item.trangThaiTongThe.startsWith('Done') ? `<div class="text-[10px] font-bold text-slate-500 dark:text-slate-400">${item.trangThaiTongThe.replace('Done - ', '')}</div>` : ''}
+            </div>
+          </td>
+          <td class="py-4 px-4 text-center">${docCodeCell}</td>
+          <td class="py-4 px-6 text-center">
+            <div class="flex items-center justify-center gap-2">${actionButtons}</div>
+          </td>
+        `;
+
+        // Make the whole row clickable
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', (e) => {
+          // Avoid opening modal only when clicking on tracking links or action buttons
+          if (e.target.closest('a') || e.target.closest('button')) {
+            return;
+          }
+          openProgressModal(item.id);
+        });
+
+        tbody.appendChild(row);
+      });
+
+      lucide.createIcons();
+    }
+
+    function getStepCircleHTML(label, stepState, isActive) {
+      const isApproved = stepState.status === 'Approved';
+      const isPendingReason = stepState.status === 'Pending_Reason';
+      const formattedDate = stepState.date ? formatDateString(stepState.date) : '';
+      let badgeClass = '';
+      const textClass = 'text-[9.5px] font-bold';
+      let tooltipText = '';
+
+      if (isApproved) {
+        badgeClass = 'bg-[#005691] border-[#005691] text-white shadow-sm shadow-[#005691]/10 scale-105';
+        tooltipText = `Đã duyệt: ${formattedDate}`;
+      } else if (isPendingReason) {
+        badgeClass = 'bg-amber-500 border-amber-500 text-white scale-105 shadow-sm shadow-amber-500/20 font-extrabold';
+        tooltipText = `PENDING: ${escapeHtml(stepState.reason || 'Chờ bổ sung tài liệu')}`;
+      } else if (isActive) {
+        badgeClass = 'bg-[#ff5c00]/10 border-[#ff5c00] text-[#ff5c00] animate-pulse scale-105 border-2 shadow-sm shadow-[#ff5c00]/10';
+        tooltipText = 'Đang chờ duyệt tại đây';
+      } else {
+        badgeClass = 'bg-slate-100 border-slate-200 text-slate-400 dark:bg-slate-800/40 dark:border-slate-700 dark:text-slate-500 border';
+        tooltipText = 'Chưa xử lý';
+      }
+
+      const labelMap = { 'MB': 'BP Mặt bằng', 'KT': 'BP Kế toán', 'PL': 'BP Pháp lý', 'COO': 'Giám đốc COO' };
+      const finalTooltip = `${labelMap[label]} - ${tooltipText}`;
+
+      return `<div class="h-8 w-8 rounded-full flex items-center justify-center border ${badgeClass} ${textClass} step-tooltip cursor-default select-none" data-tooltip="${escapeHtml(finalTooltip)}">
+        ${isApproved ? '<i data-lucide="check" class="w-3.5 h-3.5 stroke-[3px]"></i>' : (isPendingReason ? '<i data-lucide="alert-circle" class="w-3.5 h-3.5 stroke-[3px]"></i>' : label)}
+      </div>`;
+    }
+
+    // ========== ADD RECORD (SUPABASE) ==========
+    async function handleAddSubmit(e) {
+      e.preventDefault();
+
+      const loaiHS = document.getElementById('add-loaiHS').value;
+      const ngayNhan = document.getElementById('add-ngayNhan').value;
+      const vung = document.getElementById('add-vung').value;
+      const tinh = document.getElementById('add-tinh').value;
+      const nguoiGui = document.getElementById('add-nguoiGui').value.trim();
+      const ncc = document.getElementById('add-ncc').value.trim();
+      const noiDung = document.getElementById('add-noiDung').value.trim();
+      const docCode = document.getElementById('add-docCode').value.trim().toUpperCase();
+
+      if (!nguoiGui || !ncc || !noiDung || !docCode) {
+        showToast('Vui lòng điền đầy đủ các thông tin bắt buộc!', 'warning');
+        return;
+      }
+
+      try {
+        // Sử dụng RPC function (transaction) - chống race condition STT và dữ liệu mồ côi
+        const { data: rpcResult, error: rpcError } = await sb.rpc('add_ho_so_with_steps', {
+          p_loai_hs: loaiHS,
+          p_vung: vung,
+          p_tinh: tinh,
+          p_nguoi_gui: nguoiGui,
+          p_nguoi_gui_email: currentUserEmail,
+          p_ncc: ncc,
+          p_noi_dung: noiDung,
+          p_ngay_nhan: ngayNhan,
+          p_doc_code: docCode,
+          p_trang_thai: 'In Progress',
+          p_admin_received: false,
+          p_locked: false
+        });
+
+        if (rpcError) throw rpcError;
+
+        // Tải lại dữ liệu
+        await loadAllData();
+        renderDashboard();
+        closeModal('add-modal');
+        showToast(`Đã thêm mới hồ sơ số STT ${rpcResult?.stt || ''} thành công!`, 'success');
+      } catch (err) {
+        console.error('Add record error:', err);
+        showToast('Lỗi thêm hồ sơ: ' + (err.message || 'Không thể lưu'), 'warning');
+      }
+    }
+
+    // ========== PROGRESS MODAL ==========
+    let currentProgressDocId = null;
+
+    function openProgressModal(id) {
+      const item = hoSoList.find(i => i.id === id);
+      if (!item) return;
+
+      // Store current document ID for modal actions
+      currentProgressDocId = id;
+
+      const isLocked = item.locked === true;
+
+      document.getElementById('prog-doc-id').value = item.id;
+      document.getElementById('prog-id-badge').textContent = `STT ${item.stt}`;
+      document.getElementById('prog-type').textContent = item.loaiHS;
+      document.getElementById('prog-noidung').textContent = item.noiDung;
+      document.getElementById('prog-nguoigui').textContent = item.nguoiGui;
+      document.getElementById('prog-ncc').textContent = item.ncc;
+
+      // Update modal header title
+      const modalTitle = document.querySelector('#progress-modal h3');
+      if (modalTitle) {
+        if (isLocked) {
+          modalTitle.innerHTML = '<i data-lucide="lock" class="w-5 h-5 text-emerald-600"></i> Xem chi tiết hồ sơ (Chế độ chỉ xem) 🔒';
+          modalTitle.className = 'text-lg font-bold text-emerald-600 font-outfit flex items-center gap-2';
+        } else {
+          modalTitle.innerHTML = '<i data-lucide="git-commit" class="w-5 h-5"></i> Cập Nhật Tiến Độ Trình Ký';
+          modalTitle.className = 'text-lg font-bold text-[#ff5c00] font-outfit flex items-center gap-2';
+        }
+      }
+
+      const banner = document.getElementById('prog-receive-banner');
+      if (banner) {
+        banner.classList.toggle('hidden', item.adminReceived !== false);
+      }
+
+      const lockedBanner = document.getElementById('prog-locked-banner');
+      if (lockedBanner) {
+        lockedBanner.classList.toggle('hidden', !isLocked);
+      }
+
+      // If locked, disable all inputs and hide submit
+      setupStepInput(1, item.steps.step1, item.adminReceived !== false, isLocked);
+      setupStepInput(2, item.steps.step2, item.adminReceived !== false, isLocked);
+      setupStepInput(3, item.steps.step3, item.adminReceived !== false, isLocked);
+      setupStepInput(4, item.steps.final, item.adminReceived !== false, isLocked);
+
+      // Handle docCode
+      document.getElementById('prog-docCode').value = item.docCode || '';
+      const trackingLink = document.getElementById('prog-docCode-link');
+      if (trackingLink) {
+        trackingLink.href = item.docCode
+          ? `https://donhang.ghn.vn/?order_code=${encodeURIComponent(item.docCode)}`
+          : 'https://ghn.vn/blogs/trang-thai-don-hang';
+      }
+
+      // Show/hide admin-only pending labels
+      const pendingElements = document.querySelectorAll('[class*="admin-only-flex"]');
+      pendingElements.forEach(el => {
+        el.style.setProperty('display', currentRole === 'Admin' ? 'inline-flex' : 'none', 'important');
+      });
+
+      // Handle locked state for docCode wrapper
+      const docCodeWrapper = document.getElementById('prog-docCode-wrapper');
+      if (docCodeWrapper) {
+        if (isLocked) {
+          docCodeWrapper.classList.remove('hidden');
+          docCodeWrapper.classList.add('p-4', 'bg-emerald-50/10', 'border-emerald-200', 'dark:bg-emerald-500/10', 'dark:border-emerald-500/20');
+          docCodeWrapper.classList.remove('bg-orange-50/10', 'border-orange-100', 'dark:bg-slate-900/40', 'dark:border-slate-800');
+          document.getElementById('prog-docCode').disabled = true;
+          document.getElementById('prog-docCode').classList.add('opacity-70', 'cursor-not-allowed');
+          const progDocCodeLabel = docCodeWrapper.querySelector('label');
+          if (progDocCodeLabel) {
+            progDocCodeLabel.innerHTML = '<i data-lucide="truck" class="w-4 h-4"></i> Mã vận đơn GHN (Đã gửi về cho AM)';
+            progDocCodeLabel.className = 'block text-xs font-bold text-emerald-600 flex items-center gap-1.5';
+          }
+        } else {
+          docCodeWrapper.classList.remove('bg-emerald-50/10', 'border-emerald-200', 'dark:bg-emerald-500/10', 'dark:border-emerald-500/20');
+          docCodeWrapper.classList.add('bg-orange-50/10', 'border-orange-100', 'dark:bg-slate-900/40', 'dark:border-slate-800');
+          document.getElementById('prog-docCode').disabled = false;
+          document.getElementById('prog-docCode').classList.remove('opacity-70', 'cursor-not-allowed');
+        }
+      }
+
+      // Show/hide submit button
+      const submitBtn = document.getElementById('prog-submit-btn');
+      if (submitBtn) {
+        submitBtn.style.display = isLocked ? 'none' : 'inline-flex';
+      }
+
+      enforcePipelineConstraints();
+      openModal('progress-modal');
+    }
+
+    function setupStepInput(stepNum, stepObj, workflowEnabled, locked) {
+      const checkedInput = document.getElementById(`prog-step${stepNum}-checked`);
+      const dateInput = document.getElementById(`prog-step${stepNum}-date`);
+      const pendingInput = document.getElementById(`prog-step${stepNum}-pending`);
+      const reasonInput = document.getElementById(`prog-step${stepNum}-reason`);
+      const reasonContainer = document.getElementById(`prog-step${stepNum}-reason-container`);
+
+      checkedInput.checked = stepObj.status === 'Approved';
+      dateInput.value = stepObj.date || '';
+      pendingInput.checked = stepObj.status === 'Pending_Reason';
+      reasonInput.value = stepObj.reason || '';
+
+      if (pendingInput.checked) {
+        reasonContainer.classList.remove('hidden');
+      } else {
+        reasonContainer.classList.add('hidden');
+      }
+
+      // If locked, disable ALL inputs for ALL roles
+      if (locked) {
+        checkedInput.disabled = true;
+        dateInput.disabled = true;
+        pendingInput.disabled = true;
+        reasonInput.disabled = true;
+      } else if (currentRole !== 'Admin') {
+        checkedInput.disabled = true;
+        dateInput.disabled = true;
+        pendingInput.disabled = true;
+        reasonInput.disabled = true;
+      } else {
+        checkedInput.disabled = !workflowEnabled;
+        dateInput.disabled = !workflowEnabled || !checkedInput.checked;
+        pendingInput.disabled = !workflowEnabled;
+        reasonInput.disabled = !workflowEnabled || !pendingInput.checked;
+      }
+    }
+
+    function enforcePipelineConstraints() {
+      if (currentRole !== 'Admin') return;
+      const s1 = document.getElementById('prog-step1-checked');
+      const s2 = document.getElementById('prog-step2-checked');
+      const s3 = document.getElementById('prog-step3-checked');
+      const s4 = document.getElementById('prog-step4-checked');
+      const d1 = document.getElementById('prog-step1-date');
+      const d2 = document.getElementById('prog-step2-date');
+      const d3 = document.getElementById('prog-step3-date');
+      const d4 = document.getElementById('prog-step4-date');
+      
+      // Nếu hồ sơ đã locked, disable tất cả step inputs nhưng không ẩn docCode-wrapper
+      if (currentProgressDocId) {
+        const currentItem = hoSoList.find(i => i.id === currentProgressDocId);
+        if (currentItem && currentItem.locked) {
+          const allStepInputs = [s1, s2, s3, s4, d1, d2, d3, d4];
+          allStepInputs.forEach(el => { if (el) el.disabled = true; });
+          // Không ẩn docCode-wrapper vì openProgressModal() đã xử lý hiển thị nó
+          return;
+        }
+      }
+
+      // Determine if workflow is enabled based on current item's adminReceived status
+      let workflowEnabled = false;
+      if (currentProgressDocId) {
+        const currentItem = hoSoList.find(i => i.id === currentProgressDocId);
+        if (currentItem) {
+          workflowEnabled = currentItem.adminReceived === true;
+        }
+      }
+
+      if (!workflowEnabled) {
+        s1.disabled = true;
+        s2.disabled = true;
+        s3.disabled = true;
+        s4.disabled = true;
+        d1.disabled = true;
+        d2.disabled = true;
+        d3.disabled = true;
+        d4.disabled = true;
+        if (document.getElementById('prog-docCode-wrapper')) document.getElementById('prog-docCode-wrapper').classList.add('hidden');
+        return;
+      }
+
+      s2.disabled = !s1.checked;
+      s3.disabled = !s2.checked || !s1.checked;
+      s4.disabled = !s3.checked || !s2.checked || !s1.checked;
+
+      if (!s1.checked) { s2.checked = false; d2.value = ''; d2.disabled = true; }
+      if (!s2.checked) { s3.checked = false; d3.value = ''; d3.disabled = true; }
+      if (!s3.checked) { s4.checked = false; d4.value = ''; d4.disabled = true; }
+
+      d1.disabled = !s1.checked;
+      d2.disabled = !s2.checked;
+      d3.disabled = !s3.checked;
+      d4.disabled = !s4.checked;
+
+      const docCodeWrapper = document.getElementById('prog-docCode-wrapper');
+      // Chỉ hiện wrapper nếu chưa locked
+      if (s4.checked) docCodeWrapper.classList.remove('hidden');
+      else docCodeWrapper.classList.add('hidden');
+    }
+
+    function onStepCheckboxChange(stepNum) {
+      const checkedInput = document.getElementById(`prog-step${stepNum}-checked`);
+      const dateInput = document.getElementById(`prog-step${stepNum}-date`);
+      const pendingInput = document.getElementById(`prog-step${stepNum}-pending`);
+      const reasonContainer = document.getElementById(`prog-step${stepNum}-reason-container`);
+      const reasonInput = document.getElementById(`prog-step${stepNum}-reason`);
+
+      if (checkedInput.checked) {
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.value = today;
+        pendingInput.checked = false;
+        reasonContainer.classList.add('hidden');
+        reasonInput.value = '';
+      } else {
+        dateInput.value = '';
+      }
+      enforcePipelineConstraints();
+    }
+
+    function onStepPendingChange(stepNum) {
+      const checkedInput = document.getElementById(`prog-step${stepNum}-checked`);
+      const dateInput = document.getElementById(`prog-step${stepNum}-date`);
+      const pendingInput = document.getElementById(`prog-step${stepNum}-pending`);
+      const reasonContainer = document.getElementById(`prog-step${stepNum}-reason-container`);
+      const reasonInput = document.getElementById(`prog-step${stepNum}-reason`);
+
+      if (pendingInput.checked) {
+        reasonContainer.classList.remove('hidden');
+        checkedInput.checked = false;
+        dateInput.value = '';
+        reasonInput.disabled = false;  // Enable reason input
+        reasonInput.focus();
+      } else {
+        reasonContainer.classList.add('hidden');
+        reasonInput.value = '';
+        reasonInput.disabled = true;   // Disable reason input
+      }
+      enforcePipelineConstraints();
+    }
+
+    // ========== HANDLE PROGRESS SUBMIT (SUPABASE) ==========
+    async function handleProgressSubmit(e) {
+      e.preventDefault();
+
+      if (currentRole !== 'Admin') {
+        showToast('Chỉ Admin mới có quyền phê duyệt và cập nhật tiến độ!', 'warning');
+        return;
+      }
+
+      const docId = document.getElementById('prog-doc-id').value;
+      const idx = hoSoList.findIndex(i => i.id === docId);
+      if (idx === -1) return;
+      const item = hoSoList[idx];
+
+      // Không cho phép lưu nếu hồ sơ đã locked
+      if (item.locked) {
+        showToast('🔒 Hồ sơ đã hoàn thành và bị khóa! Không thể chỉnh sửa.', 'warning');
+        closeModal('progress-modal');
+        return;
+      }
+
+      const s1c = document.getElementById('prog-step1-checked').checked;
+      const s2c = document.getElementById('prog-step2-checked').checked;
+      const s3c = document.getElementById('prog-step3-checked').checked;
+      const s4c = document.getElementById('prog-step4-checked').checked;
+      const s1d = document.getElementById('prog-step1-date').value;
+      const s2d = document.getElementById('prog-step2-date').value;
+      const s3d = document.getElementById('prog-step3-date').value;
+      const s4d = document.getElementById('prog-step4-date').value;
+      const s1p = document.getElementById('prog-step1-pending').checked;
+      const s2p = document.getElementById('prog-step2-pending').checked;
+      const s3p = document.getElementById('prog-step3-pending').checked;
+      const s4p = document.getElementById('prog-step4-pending').checked;
+      const s1r = document.getElementById('prog-step1-reason').value.trim();
+      const s2r = document.getElementById('prog-step2-reason').value.trim();
+      const s3r = document.getElementById('prog-step3-reason').value.trim();
+      const s4r = document.getElementById('prog-step4-reason').value.trim();
+
+      if ((s1c && !s1d) || (s2c && !s2d) || (s3c && !s3d) || (s4c && !s4d)) {
+        showToast('Vui lòng chọn đầy đủ ngày phê duyệt cho các bộ phận đã duyệt!', 'warning');
+        return;
+      }
+      if ((s1p && !s1r) || (s2p && !s2r) || (s3p && !s3r) || (s4p && !s4r)) {
+        showToast('Vui lòng nhập lý do Pending bắt buộc!', 'warning');
+        return;
+      }
+
+      let docCodeValue = item.docCode || '';
+      if (s4c) {
+        const inputDocCode = document.getElementById('prog-docCode').value.trim().toUpperCase();
+        if (!inputDocCode) {
+          showToast('Vui lòng nhập hoặc tạo Mã vận đơn GHN trước khi lưu!', 'warning');
+          document.getElementById('prog-docCode').focus();
+          return;
+        }
+        docCodeValue = inputDocCode;
+      }
+
+      try {
+        // Sử dụng RPC function (transaction) - cập nhật steps + ho_so trong 1 transaction
+        const stepsToUpdate = [
+          { step_num: 1, status: s1c ? 'Approved' : (s1p ? 'Pending_Reason' : 'Pending'), date: s1c ? s1d : null, reason: s1p ? s1r : null },
+          { step_num: 2, status: s2c ? 'Approved' : (s2p ? 'Pending_Reason' : 'Pending'), date: s2c ? s2d : null, reason: s2p ? s2r : null },
+          { step_num: 3, status: s3c ? 'Approved' : (s3p ? 'Pending_Reason' : 'Pending'), date: s3c ? s3d : null, reason: s3p ? s3r : null },
+          { step_num: 4, status: s4c ? 'Approved' : (s4p ? 'Pending_Reason' : 'Pending'), date: s4c ? s4d : null, reason: s4p ? s4r : null }
+        ];
+
+        const isLocked = s4c && Boolean(docCodeValue);
+        const trangThai = s4c ? `Done - ${formatDateString(s4d)}` : "In Progress";
+
+        const { data: rpcResult, error: rpcError } = await sb.rpc('update_ho_so_progress', {
+          p_ho_so_id: item.dtId,
+          p_steps: stepsToUpdate,
+          p_doc_code: docCodeValue,
+          p_locked: isLocked,
+          p_trang_thai: trangThai
+        });
+
+        if (rpcError) throw rpcError;
+        if (rpcResult && rpcResult.success === false) {
+          throw new Error(rpcResult.error || 'Không thể cập nhật tiến độ');
+        }
+
+        // Tải lại dữ liệu
+        await loadAllData();
+        renderDashboard();
+        closeModal('progress-modal');
+
+        if (isLocked) {
+          showToast(`🔒 Hồ sơ STT ${item.stt} đã hoàn thành và bị khóa! Không thể chỉnh sửa thêm.`, 'success');
+        } else {
+          showToast(`Đã cập nhật tiến độ của hồ sơ STT ${item.stt} thành công!`, 'success');
+        }
+      } catch (err) {
+        console.error('Update progress error:', err);
+        showToast('Lỗi cập nhật tiến độ: ' + (err.message || 'Không thể lưu'), 'warning');
+      }
+    }
+
+    function setWorkflowTab(tab) {
+      currentWorkflowTab = tab;
+      document.querySelectorAll('.workflow-tab-btn').forEach(btn => {
+        const isActive = btn.id === `workflow-tab-${tab}`;
+        btn.className = isActive
+          ? 'workflow-tab-btn px-4 py-2 rounded-xl text-sm font-bold border transition-all shadow-sm border-[#ff5c00] bg-[#ff5c00] text-white dark:border-[#ff5c00] dark:bg-[#ff5c00] dark:text-white'
+          : 'workflow-tab-btn px-4 py-2 rounded-xl text-sm font-bold border border-slate-200 bg-slate-50 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 transition-all';
+      });
+      applyFilters();
+    }
+
+    async function promptAddDocCode(id) {
+      if (currentRole !== 'Admin') {
+        showToast('Vai trò BP Vận hành không có quyền tạo mã vận đơn!', 'warning');
+        return;
+      }
+      const item = hoSoList.find(i => i.id === id);
+      if (item && item.locked) {
+        showToast('🔒 Hồ sơ đã hoàn thành và bị khóa! Không thể thay đổi mã vận đơn.', 'warning');
+        return;
+      }
+      openProgressModal(id);
+      setTimeout(() => {
+        const wrapper = document.getElementById('prog-docCode-wrapper');
+        if (wrapper) wrapper.classList.remove('hidden');
+        const input = document.getElementById('prog-docCode');
+        if (input) { input.focus(); input.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+      }, 150);
+    }
+
+    // ========== MARK AS RECEIVED (SUPABASE) ==========
+    async function markAsReceivedFromModal() {
+      if (currentRole !== 'Admin') {
+        showToast('Chỉ Admin mới có quyền nhận hồ sơ này!', 'warning');
+        return;
+      }
+
+      if (!currentProgressDocId) {
+        showToast('Không tìm thấy hồ sơ!', 'warning');
+        return;
+      }
+
+      const idx = hoSoList.findIndex(i => i.id === currentProgressDocId);
+      if (idx === -1) return;
+
+      const item = hoSoList[idx];
+      if (item.adminReceived) {
+        showToast('Hồ sơ này đã được tiếp nhận trước đó!', 'info');
+        return;
+      }
+      if (item.locked) {
+        showToast('🔒 Hồ sơ đã hoàn thành và bị khóa! Không thể thực hiện thao tác này.', 'warning');
+        return;
+      }
+
+      // Lưu thời gian tiếp nhận
+      const now = new Date();
+      const receiveDate = now.toISOString().split('T')[0];
+      const receiveTime = now.toTimeString().split(' ')[0].slice(0, 5);
+
+      try {
+        const { error } = await sb
+          .from('ho_so')
+          .update({
+            admin_received: true,
+            admin_received_date: receiveDate,
+            admin_received_time: receiveTime
+          })
+          .eq('id', item.dtId);
+
+        if (error) throw error;
+
+        // Tải lại dữ liệu
+        await loadAllData();
+        renderDashboard();
+
+        // Cập nhật lại modal
+        const banner = document.getElementById('prog-receive-banner');
+        if (banner) banner.classList.add('hidden');
+
+        // Force-enable all step checkboxes and inputs
+        for (let step = 1; step <= 4; step++) {
+          const checkedInput = document.getElementById(`prog-step${step}-checked`);
+          const dateInput = document.getElementById(`prog-step${step}-date`);
+          const pendingInput = document.getElementById(`prog-step${step}-pending`);
+          const reasonInput = document.getElementById(`prog-step${step}-reason`);
+
+          if (checkedInput) checkedInput.disabled = false;
+          if (pendingInput) pendingInput.disabled = false;
+          if (reasonInput) reasonInput.disabled = !pendingInput?.checked;
+        }
+
+        // Gọi enforcePipelineConstraints để cập nhật pipeline constraint
+        enforcePipelineConstraints();
+
+        showToast(`✅ Đã xác nhận tiếp nhận hồ sơ lúc ${receiveTime} ngày ${formatDateString(receiveDate)}!`, 'success');
+      } catch (err) {
+        console.error('Mark as received error:', err);
+        showToast('Lỗi xác nhận tiếp nhận: ' + (err.message || 'Không thể lưu'), 'warning');
+      }
+    }
+
+    async function markAsReceived(id) {
+      if (currentRole !== 'Admin') {
+        showToast('Chỉ Admin mới có quyền nhận hồ sơ này!', 'warning');
+        return;
+      }
+
+      const idx = hoSoList.findIndex(i => i.id === id);
+      if (idx === -1) return;
+
+      const item = hoSoList[idx];
+      if (item.locked) {
+        showToast('🔒 Hồ sơ đã hoàn thành và bị khóa! Không thể thực hiện thao tác này.', 'warning');
+        return;
+      }
+
+      // Lưu thời gian tiếp nhận
+      const now = new Date();
+      const receiveDate = now.toISOString().split('T')[0];
+      const receiveTime = now.toTimeString().split(' ')[0].slice(0, 5);
+
+      try {
+        const { error } = await sb
+          .from('ho_so')
+          .update({
+            admin_received: true,
+            admin_received_date: receiveDate,
+            admin_received_time: receiveTime
+          })
+          .eq('id', item.dtId);
+
+        if (error) throw error;
+
+        // Tải lại dữ liệu
+        await loadAllData();
+        renderDashboard();
+
+        // Mở modal và tự động chuyển tab
+        openProgressModal(id);
+        setWorkflowTab('in-progress');
+
+        showToast(`✅ Đã xác nhận tiếp nhận hồ sơ lúc ${receiveTime}. Hồ sơ đã chuyển sang mục Đang trình ký!`, 'success');
+      } catch (err) {
+        console.error('Mark as received error:', err);
+        showToast('Lỗi xác nhận tiếp nhận: ' + (err.message || 'Không thể lưu'), 'warning');
+      }
+    }
+
+    // ========== OPEN TRACKING PAGE ==========
+    function openTrackingPageFromInput() {
+      const input = document.getElementById('prog-docCode');
+      const link = document.getElementById('prog-docCode-link');
+      if (input && input.value.trim() && link) {
+        link.href = `https://donhang.ghn.vn/?order_code=${encodeURIComponent(input.value.trim())}`;
+      }
+    }
+
+    // ========== DELETE (SUPABASE) ==========
+    async function deleteHoSo(id) {
+      if (currentRole !== 'Admin') {
+        showToast('Chỉ Admin có quyền xóa hồ sơ này!', 'warning');
+        return;
+      }
+      const item = hoSoList.find(i => i.id === id);
+      if (!item) return;
+      if (item.locked) {
+        showToast('🔒 Hồ sơ đã hoàn thành và bị khóa! Không thể xóa hồ sơ đã khóa.', 'warning');
+        return;
+      }
+      if (confirm(`Bạn có chắc chắn muốn xóa hồ sơ STT ${item.stt} (${item.noiDung}) khỏi hệ thống?`)) {
+        try {
+          // Sử dụng RPC function (transaction) - xóa + sắp xếp lại STT trong 1 transaction
+          const { data: rpcResult, error: rpcError } = await sb.rpc('delete_ho_so_and_reorder', {
+            p_ho_so_id: item.dtId
+          });
+
+          if (rpcError) throw rpcError;
+          if (rpcResult && rpcResult.success === false) {
+            throw new Error(rpcResult.error || 'Không thể xóa hồ sơ');
+          }
+
+          // Tải lại dữ liệu
+          await loadAllData();
+          renderDashboard();
+          showToast(`Đã xóa hồ sơ thành công và cập nhật lại số thứ tự!`, 'info');
+        } catch (err) {
+          console.error('Delete error:', err);
+          showToast('Lỗi xóa hồ sơ: ' + (err.message || 'Không thể xóa'), 'warning');
+        }
+      }
+    }
+
+    // ========== EXPORT CSV ==========
+    async function exportData() {
+      if (currentRole !== 'Admin') {
+        showToast('Chỉ Admin mới có quyền xuất dữ liệu!', 'warning');
+        return;
+      }
+
+      try {
+        // Lấy tất cả dữ liệu từ Supabase
+        const { data, error } = await sb.from('ho_so').select('*').order('stt', { ascending: true });
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+          showToast('Không có dữ liệu để xuất!', 'info');
+          return;
+        }
+
+        // Header
+        const headers = ['STT', 'Loại HS', 'Vùng', 'Tỉnh', 'Người gửi', 'Email người gửi', 'NCC', 'Nội dung', 'Ngày nhận', 'Mã vận đơn', 'Trạng thái', 'Đã khóa'];
+
+        // Hàm escape chống CSV Injection (Formula Injection)
+        function escapeCsvField(value) {
+          if (value === null || value === undefined) return '';
+          const str = String(value);
+          // Nếu bắt đầu bằng =, +, -, @, tab, CR thì prefix bằng ' để Excel không thực thi
+          if (str.startsWith('=') || str.startsWith('+') || str.startsWith('-') || str.startsWith('@') || str.startsWith('\t') || str.startsWith('\r')) {
+            return `"'${str.replace(/"/g, '""')}"`;
+          }
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+
+        // Build CSV
+        const rows = data.map(row => [
+          row.stt,
+          escapeCsvField(row.loai_hs),
+          escapeCsvField(row.vung),
+          escapeCsvField(row.tinh),
+          escapeCsvField(row.nguoi_gui),
+          escapeCsvField(row.nguoi_gui_email),
+          escapeCsvField(row.ncc),
+          escapeCsvField(row.noi_dung),
+          escapeCsvField(row.ngay_nhan),
+          escapeCsvField(row.doc_code || ''),
+          escapeCsvField(row.trang_thai || ''),
+          escapeCsvField(row.locked ? 'Có' : 'Không')
+        ]);
+
+        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+
+        // Download
+        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `dats-ho-so-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showToast(`Đã xuất ${data.length} hồ sơ ra file CSV!`, 'success');
+      } catch (err) {
+        console.error('Export error:', err);
+        showToast('Lỗi xuất dữ liệu: ' + (err.message || 'Không thể xuất'), 'warning');
+      }
+    }
+
+    // ========== MIGRATE OLD LOCALSTORAGE DATA ==========
+    async function migrateLocalStorageToSupabase() {
+      if (!isSuperAdmin(currentUserEmail)) {
+        showToast('Chỉ Superadmin mới có quyền migrate dữ liệu!', 'warning');
+        return;
+      }
+
+      const oldDataStr = localStorage.getItem('dats-hoso-v2');
+      if (!oldDataStr) {
+        showToast('Không tìm thấy dữ liệu cũ trong localStorage!', 'info');
+        return;
+      }
+
+      const oldData = JSON.parse(oldDataStr);
+      let successCount = 0;
+
+      showToast(`Bắt đầu migrate ${oldData.length} hồ sơ từ localStorage...`, 'info');
+
+      for (const doc of oldData) {
+        try {
+          // Kiểm tra xem đã migrate chưa (tránh trùng)
+          const { data: existing } = await sb
+            .from('ho_so')
+            .select('id')
+            .eq('noi_dung', doc.noiDung)
+            .eq('nguoi_gui', doc.nguoiGui)
+            .limit(1);
+
+          if (existing && existing.length > 0) continue; // Đã tồn tại
+
+          // Insert hồ sơ
+          const { data: newDoc, error: insertError } = await sb
+            .from('ho_so')
+            .insert({
+              stt: doc.stt,
+              loai_hs: doc.loaiHS,
+              vung: doc.vung,
+              tinh: doc.tinh,
+              nguoi_gui: doc.nguoiGui,
+              nguoi_gui_email: doc.nguoiGuiEmail || 'migrated@ghn.vn',
+              ncc: doc.ncc,
+              noi_dung: doc.noiDung,
+              ngay_nhan: doc.ngayNhan,
+              doc_code: doc.docCode || '',
+              trang_thai: doc.trangThaiTongThe || 'In Progress',
+              admin_received: doc.adminReceived || false,
+              admin_received_date: doc.adminReceivedDate || null,
+              admin_received_time: doc.adminReceivedTime || null,
+              locked: doc.locked || false
+            })
+            .select();
+
+          if (insertError) throw insertError;
+
+          const newHoSoId = newDoc[0].id;
+
+          // Insert steps
+          const steps = doc.steps || {};
+          const stepsData = [
+            { ho_so_id: newHoSoId, step_num: 1, step_label: 'BP Mặt bằng', status: steps.step1?.status || 'Pending', date: steps.step1?.date || null, reason: steps.step1?.reason || null },
+            { ho_so_id: newHoSoId, step_num: 2, step_label: 'BP Kế toán', status: steps.step2?.status || 'Pending', date: steps.step2?.date || null, reason: steps.step2?.reason || null },
+            { ho_so_id: newHoSoId, step_num: 3, step_label: 'BP Pháp lý', status: steps.step3?.status || 'Pending', date: steps.step3?.date || null, reason: steps.step3?.reason || null },
+            { ho_so_id: newHoSoId, step_num: 4, step_label: 'COO', status: steps.final?.status || 'Pending', date: steps.final?.date || null, reason: steps.final?.reason || null }
+          ];
+
+          const { error: stepsError } = await sb.from('ho_so_steps').insert(stepsData);
+          if (stepsError) throw stepsError;
+
+          successCount++;
+        } catch (err) {
+          console.error('Migrate record error:', err);
+        }
+      }
+
+      // Migrate admin list
+      const oldAdminsStr = localStorage.getItem('dats-admin-list');
+      if (oldAdminsStr) {
+        const oldAdmins = JSON.parse(oldAdminsStr);
+        for (const admin of oldAdmins) {
+          try {
+            const { error } = await sb.from('admin_list').upsert({
+              email: admin.email,
+              name: admin.name,
+              is_super_admin: admin.isSuperAdmin || false
+            }, { onConflict: 'email' });
+            if (error) console.error('Migrate admin error:', error);
+          } catch (err) {
+            console.error('Migrate admin error:', err);
+          }
+        }
+      }
+
+      showToast(`✅ Đã migrate ${successCount}/${oldData.length} hồ sơ thành công!`, 'success');
+
+      // Tải lại dữ liệu
+      await loadAdminList();
+      await loadAllData();
+      renderDashboard();
+      renderAdminPanel();
+    }
+
+    // ========== TOAST ==========
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl border text-sm transition-all duration-300 transform translate-x-20 opacity-0 pointer-events-auto max-w-sm`;
+      let icon = '';
+      if (type === 'success') { toast.className += ' bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'; icon = 'check-circle-2'; }
+      else if (type === 'warning') { toast.className += ' bg-amber-500/10 border-amber-500/20 text-[#ff5c00]'; icon = 'alert-triangle'; }
+      else if (type === 'info') { toast.className += ' bg-blue-500/10 border-blue-500/20 text-[#005691] dark:text-blue-400'; icon = 'info'; }
+
+      toast.innerHTML = `
+        <i data-lucide="${icon}" class="w-5 h-5 flex-shrink-0"></i>
+        <div class="font-bold text-xs pr-2 flex-1">${message}</div>
+        <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+        </button>
+      `;
+      container.appendChild(toast);
+      lucide.createIcons();
+      setTimeout(() => { toast.classList.remove('translate-x-20', 'opacity-0'); }, 50);
+      setTimeout(() => {
+        toast.classList.add('translate-x-20', 'opacity-0');
+        setTimeout(() => { toast.remove(); }, 300);
+      }, 4000);
+    }
+  </script>
+</body>
+</html>
